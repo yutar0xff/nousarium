@@ -1,8 +1,11 @@
 "use client";
 
 import {
+  BarButton,
   ChangesIcon,
   ChatIcon,
+  ChevronLeftIcon,
+  cn,
   IconButton,
   Menu,
   MenuItem,
@@ -13,8 +16,6 @@ import {
   MoreIcon,
   NotesIcon,
   Sheet,
-  ChevronLeftIcon,
-  cn,
 } from "@nousarium/ui";
 import { MODEL_OPTIONS } from "@nousarium/core";
 import Link from "next/link";
@@ -24,6 +25,7 @@ import { ConversationList } from "./conversation-sidebar";
 import { NotesProvider } from "./notes-context";
 import { TagFolderNav } from "./tag-folder-nav";
 import { useNewConversationShortcut } from "../lib/use-new-conversation-shortcut";
+import { sidebarActionLabel, useSidebar } from "../lib/use-sidebar";
 import { useEffectivePathname } from "../lib/pathname";
 import { applyThemePreference, readThemePreference, type ThemePreference } from "../lib/theme";
 
@@ -129,41 +131,8 @@ function OverflowMenu() {
   );
 }
 
-const SIDEBAR_KEY = "nousarium-sidebar";
-
-function readSidebarOpen(): boolean {
-  try {
-    const value = localStorage.getItem(SIDEBAR_KEY);
-    if (value === "closed") return false;
-    if (value === "open") return true;
-  } catch {
-    // ignore
-  }
-  return true;
-}
-
-function writeSidebarOpen(open: boolean) {
-  try {
-    localStorage.setItem(SIDEBAR_KEY, open ? "open" : "closed");
-  } catch {
-    // ignore
-  }
-}
-
-function HitSlot({ children }: { children: ReactNode }) {
-  return <span className="inline-flex size-11 shrink-0 items-center justify-center">{children}</span>;
-}
-
 function AppMark() {
   return <img src="/icon.svg" alt="" width={32} height={32} className="size-8 rounded-lg" />;
-}
-
-function AppMarkSlot() {
-  return (
-    <HitSlot>
-      <AppMark />
-    </HitSlot>
-  );
 }
 
 function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
@@ -182,47 +151,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { title, chat } = useChrome();
   const pathname = useEffectivePathname();
   const onFiles = pathname.startsWith("/files");
+  const { open, desktop, sheetOpen, setSheetOpen, setDesktopOpen, onMenuClick } = useSidebar();
   useNewConversationShortcut();
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [desktop, setDesktop] = useState(false);
-
-  useEffect(() => {
-    setSidebarOpen(readSidebarOpen());
-  }, []);
-
-  useEffect(() => {
-    const query = window.matchMedia("(min-width: 768px)");
-    const sync = () => setDesktop(query.matches);
-    sync();
-    query.addEventListener("change", sync);
-    return () => query.removeEventListener("change", sync);
-  }, []);
-
-  function setDesktopSidebar(open: boolean) {
-    setSidebarOpen(open);
-    writeSidebarOpen(open);
-  }
-
-  function onMenuClick() {
-    if (desktop) {
-      setDesktopSidebar(!sidebarOpen);
-      return;
-    }
-    setSheetOpen(true);
-  }
-
-  const menuLabel = desktop
-    ? onFiles
-      ? sidebarOpen
-        ? "フォルダを閉じる"
-        : "フォルダを開く"
-      : sidebarOpen
-        ? "会話リストを閉じる"
-        : "会話リストを開く"
-    : onFiles
-      ? "フォルダを開く"
-      : "会話リストを開く";
 
   return (
     <NotesProvider>
@@ -230,21 +160,18 @@ export function AppShell({ children }: { children: ReactNode }) {
         <aside
           className={cn(
             "w-[260px] shrink-0 flex-col border-r border-stroke bg-surface-elevated",
-            sidebarOpen ? "hidden md:flex" : "hidden",
+            open ? "hidden md:flex" : "hidden",
           )}
         >
           <div className="flex h-12 items-center px-2">
-            <IconButton
-              label={onFiles ? "フォルダを閉じる" : "会話リストを閉じる"}
-              className="w-auto min-w-0 flex-1 justify-start"
-              onClick={() => setDesktopSidebar(false)}
+            <BarButton
+              label={sidebarActionLabel(onFiles, "close")}
+              start={<AppMark />}
+              end={<ChevronLeftIcon />}
+              onClick={() => setDesktopOpen(false)}
             >
-              <AppMarkSlot />
-              <span className="min-w-0 flex-1 truncate text-left text-heading font-semibold">Nousarium</span>
-              <HitSlot>
-                <ChevronLeftIcon />
-              </HitSlot>
-            </IconButton>
+              Nousarium
+            </BarButton>
           </div>
           <SidebarBody />
           <NavLinks orientation="col" />
@@ -253,8 +180,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <header className="grid h-12 shrink-0 grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-center border-b border-stroke px-2">
             <div className="flex items-center">
-              {desktop && sidebarOpen ? null : (
-                <IconButton label={menuLabel} onClick={onMenuClick}>
+              {desktop && open ? null : (
+                <IconButton label={sidebarActionLabel(onFiles, "open")} onClick={onMenuClick}>
                   <AppMark />
                 </IconButton>
               )}
@@ -273,7 +200,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <NavLinks orientation="row" />
         </div>
 
-        <Sheet open={sheetOpen} onOpenChange={setSheetOpen} title="Nousarium" start={<AppMarkSlot />}>
+        <Sheet open={sheetOpen} onOpenChange={setSheetOpen} title="Nousarium" start={<AppMark />}>
           <SidebarBody onNavigate={() => setSheetOpen(false)} />
         </Sheet>
       </div>

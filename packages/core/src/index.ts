@@ -3,4 +3,4 @@ export { toolsForPolicy, isDangerousShell, ACCESS_POLICY_LABELS, DEFAULT_ACCESS_
 export { applyPendingPolicy, snapshotPolicy } from "./policy-transition";
 export { DEFAULT_MODEL_ID, MODEL_OPTIONS, resolveModelId } from "./models";
 export { CONVERSATION_TITLE_PLACEHOLDER, fallbackConversationTitle, needsGeneratedTitle, sanitizeConversationTitle } from "./conversation-title";
-export { formatFileNameTimestamp, journalFileName, slugifyFileName, slugifyTitle } from "./naming";
+export { formatFileNameTimestamp, journalFileName, slugifyFileName } from "./naming";

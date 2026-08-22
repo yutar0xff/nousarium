@@ -11,9 +11,6 @@ export function slugifyFileName(name: string): string {
   return normalized.slice(0, 80) || "untitled";
 }
 
-/** @deprecated Use slugifyFileName for paths. */
-export const slugifyTitle = slugifyFileName;
-
 /** ISO 8601 基本形式（ファイル名向け）。例: 20260822T162045 */
 export function formatFileNameTimestamp(date: Date): string {
   const y = date.getFullYear();

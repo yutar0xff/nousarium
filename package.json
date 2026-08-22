@@ -8,8 +8,7 @@
     "test": "pnpm -r --if-present test",
     "lint": "pnpm -r --if-present lint && node scripts/check-boundaries.mjs",
     "check-boundaries": "node scripts/check-boundaries.mjs",
-    "vault:init": "pnpm --filter @nousarium/vault-fs vault:init",
-    "spike:cursor": "pnpm --filter @nousarium/agent-cursor spike"
+    "vault:init": "pnpm --filter @nousarium/vault-fs vault:init"
   },
   "pnpm": {
     "onlyBuiltDependencies": ["esbuild"]

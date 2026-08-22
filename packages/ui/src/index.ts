@@ -1,6 +1,6 @@
 export { cn } from "./cn";
 export { Button } from "./button";
-export { IconButton } from "./icon-button";
+export { IconButton, IconButtonSlot, BarButton } from "./icon-button";
 export { Pill } from "./pill";
 export { Field } from "./field";
 export { TextInput, Textarea, Select } from "./text-input";

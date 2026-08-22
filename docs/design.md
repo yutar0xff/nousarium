@@ -246,7 +246,8 @@ AI の応答は長文になるため、枠で囲まず読み幅いっぱいに�
 | 名前 | 用途 |
 | --- | --- |
 | `Button` | `primary` `secondary` `ghost` `danger`。高さ 44px |
-| `IconButton` | アプリバー、入力欄。44px 正方形 |
+| `IconButton` | アプリバー、入力欄。44px 正方形。幅いっぱいに伸ばすときは `layout="bar"` |
+| `BarButton` | 先頭アイコン・ラベル・末尾アイコンを 1 つの操作にまとめる。サイドバー先頭の閉じる操作 |
 | `Pill` | 状態、タグ、件数。`accent` `warning` `danger` `success` `neutral` |
 | `Field` | ラベルと入力の組。説明文とエラーを持てる |
 | `TextInput` / `Textarea` / `Select` | 素の要素セレクタではなく、コンポーネントで統一する |
@@ -313,8 +314,6 @@ Tailwind v4 を CSS ファーストで使います。
 Radix は見た目を持たないため、上のトークン体系をそのまま当てられます。
 
 shadcn/ui は採用しません。独自のトークン語彙（`--background` `--foreground` `--primary`）を持ち込み、`surface` / `text-primary` / `accent` と二重になります。必要なのは対話・シート・メニュー程度で、レジストリ全体を抱える利点がありません。
-
-Radix の導入は [アーキテクチャ](architecture.md) の依存方針に影響します。`packages/ui` の依存を「React / Tailwind / Radix Primitives のみ」に更新します。
 
 ## 使わないもの
 

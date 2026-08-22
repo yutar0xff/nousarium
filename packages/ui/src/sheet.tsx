@@ -4,7 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import type { ReactNode } from "react";
 import { cn } from "./cn";
 import { CloseIcon } from "./icons";
-import { IconButton } from "./icon-button";
+import { BarButton, IconButton } from "./icon-button";
 
 export function Sheet({
   open,
@@ -34,19 +34,14 @@ export function Sheet({
         >
           <div className="flex h-12 shrink-0 items-center border-b border-stroke px-2">
             {start ? (
-              <Dialog.Close asChild>
-                <IconButton label="閉じる" className="w-auto min-w-0 flex-1 justify-start">
-                  {start}
-                  <Dialog.Title asChild>
-                    <span className="min-w-0 flex-1 truncate text-left text-heading font-semibold">
-                      {title}
-                    </span>
-                  </Dialog.Title>
-                  <span className="inline-flex size-11 shrink-0 items-center justify-center">
-                    <CloseIcon />
-                  </span>
-                </IconButton>
-              </Dialog.Close>
+              <>
+                <Dialog.Title className="sr-only">{title}</Dialog.Title>
+                <Dialog.Close asChild>
+                  <BarButton label="閉じる" start={start} end={<CloseIcon />}>
+                    {title}
+                  </BarButton>
+                </Dialog.Close>
+              </>
             ) : (
               <>
                 <Dialog.Title className="min-w-0 flex-1 truncate px-1 text-heading font-semibold text-text-primary">
