@@ -188,6 +188,9 @@ importers:
       '@nousarium/core':
         specifier: workspace:*
         version: link:../core
+      '@nousarium/markdown':
+        specifier: workspace:*
+        version: link:../markdown
     devDependencies:
       '@types/node':
         specifier: ^24.3.0

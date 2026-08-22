@@ -1,15 +1,23 @@
 import { Agent, type AgentOptions, Cursor, JsonlLocalAgentStore } from "@cursor/sdk";
 import type { AgentEvent } from "@nousarium/contracts";
 import type { AgentInput, AgentPort } from "@nousarium/core";
-import { isDangerousShell, toolsForPolicy } from "@nousarium/core";
+import { isDangerousShell, promptForIntent, resolveModelId, toolsForPolicy } from "@nousarium/core";
 import { mkdirSync } from "node:fs";
 import { mapCursorEvent } from "./map-events.js";
+import { generateConversationTitleWithCursor } from "./title.js";
 
 interface CursorAgentPortOptions {
   apiKey: string;
   model?: string;
   storePath: string;
-  sandboxEnabled?: boolean;
+}
+
+function localOptions(cwd: string, store: JsonlLocalAgentStore): NonNullable<AgentOptions["local"]> {
+  return {
+    cwd,
+    store,
+    sandboxOptions: { enabled: false },
+  };
 }
 
 export function createCursorAgentPort(options: CursorAgentPortOptions): AgentPort {
@@ -29,17 +37,13 @@ export function createCursorAgentPort(options: CursorAgentPortOptions): AgentPor
       };
 
       const tools = toolsForPolicy(input.accessPolicy);
-      const sandboxEnabled = options.sandboxEnabled ?? true;
+      const modelId = resolveModelId(input.model, options.model ?? "auto");
       const base: AgentOptions = {
         apiKey: options.apiKey,
-        model: { id: options.model ?? "composer-2.5" },
+        model: { id: modelId },
         mode: input.mode,
         ...(tools ? { tools } : {}),
-        local: {
-          cwd: input.vaultPath,
-          store,
-          ...(sandboxEnabled ? { sandboxOptions: { enabled: true } } : {}),
-        },
+        local: localOptions(input.vaultPath, store),
       };
 
       let agent;
@@ -47,20 +51,8 @@ export function createCursorAgentPort(options: CursorAgentPortOptions): AgentPor
         agent = await createOrResume(input.conversation.cursorAgentId, base);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        if (sandboxEnabled && base.local) {
-          try {
-            agent = await createOrResume(input.conversation.cursorAgentId, {
-              ...base,
-              local: { cwd: base.local.cwd, store: base.local.store },
-            });
-          } catch {
-            yield { type: "run.finished", runId: input.runId, status: "error", error: message };
-            return;
-          }
-        } else {
-          yield { type: "run.finished", runId: input.runId, status: "error", error: message };
-          return;
-        }
+        yield { type: "run.finished", runId: input.runId, status: "error", error: message };
+        return;
       }
 
       yield { type: "agent.bound", runId: input.runId, agentId: agent.agentId };
@@ -112,6 +104,14 @@ export function createCursorAgentPort(options: CursorAgentPortOptions): AgentPor
     async cancel(runId) {
       await active.get(runId)?.cancel?.();
     },
+
+    async generateConversationTitle(message, model) {
+      return generateConversationTitleWithCursor({
+        apiKey: options.apiKey,
+        model: model ?? options.model,
+        message,
+      });
+    },
   };
 }
 
@@ -122,7 +122,9 @@ async function createOrResume(agentId: string | null, options: AgentOptions) {
 
 function buildPrompt(input: AgentInput): string {
   const exclusion = [
+    promptForIntent(input.intent),
     "保護ディレクトリ `_protected/` には入らない。",
+    "`ai_access: excluded` のノートは読まない。",
     "対話ログの生本文は追記以外で書き換えない。",
     "git push、reset --hard、clean、ホスト外への通信はしない。",
     input.accessPolicy === "chat" ? "Vault を読まない。" : "",

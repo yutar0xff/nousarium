@@ -1,5 +1,5 @@
 import type { Message, NoteProposal } from "@nousarium/contracts";
-import { slugifyTitle } from "./naming";
+import { slugifyFileName } from "./naming";
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -12,7 +12,7 @@ export function buildNoteProposal(input: {
 }): NoteProposal {
   const title = input.title.trim();
   const dir = input.directory.replace(/^\/+|\/+$/g, "") || "00_Inbox";
-  const file = `${slugifyTitle(title)}.md`;
+  const file = `${slugifyFileName(title)}.md`;
   const path = `${dir}/${file}`;
   const dialogue = input.messages
     .filter((message) => message.role === "user" || message.role === "assistant")

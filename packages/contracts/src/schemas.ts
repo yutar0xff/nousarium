@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+export const conversationIntentSchema = z.enum(["question", "explore", "research", "vault"]);
+export type ConversationIntent = z.infer<typeof conversationIntentSchema>;
+
+export const modelIdSchema = z.string().min(1);
+export type ModelId = z.infer<typeof modelIdSchema>;
+
 export const conversationModeSchema = z.enum(["plan", "agent"]);
 export type ConversationMode = z.infer<typeof conversationModeSchema>;
 
@@ -13,10 +19,13 @@ export const conversationSchema = z.object({
   id: z.string(),
   title: z.string(),
   cursorAgentId: z.string().nullable(),
+  intent: conversationIntentSchema,
+  model: modelIdSchema,
   mode: conversationModeSchema,
   accessPolicy: accessPolicySchema,
   pendingMode: conversationModeSchema.nullable(),
   pendingAccessPolicy: accessPolicySchema.nullable(),
+  pendingModel: modelIdSchema.nullable(),
   journalPath: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -39,6 +48,8 @@ export const runSchema = z.object({
   id: z.string(),
   conversationId: z.string(),
   status: runStatusSchema,
+  intent: conversationIntentSchema,
+  model: modelIdSchema,
   mode: conversationModeSchema,
   accessPolicy: accessPolicySchema,
   gitBefore: z.string().nullable(),
@@ -81,6 +92,7 @@ export const saveDocumentRequestSchema = z.object({
   path: z.string().min(1),
   content: z.string(),
   expectedHash: z.string().nullable(),
+  overwrite: z.boolean().optional(),
 });
 export type SaveDocumentRequest = z.infer<typeof saveDocumentRequestSchema>;
 
@@ -100,20 +112,24 @@ export type NoteProposal = z.infer<typeof noteProposalSchema>;
 
 export const createConversationRequestSchema = z.object({
   title: z.string().optional(),
-  mode: conversationModeSchema.default("plan"),
-  accessPolicy: accessPolicySchema.default("read"),
+  intent: conversationIntentSchema.default("explore"),
+  model: modelIdSchema.default("auto"),
+  mode: conversationModeSchema.optional(),
+  accessPolicy: accessPolicySchema.optional(),
 });
 
 export const sendMessageRequestSchema = z.object({
   content: z.string().min(1),
   mode: conversationModeSchema.optional(),
   accessPolicy: accessPolicySchema.optional(),
+  model: modelIdSchema.optional(),
 });
 export type SendMessageRequest = z.infer<typeof sendMessageRequestSchema>;
 
 export const updatePolicyRequestSchema = z.object({
   mode: conversationModeSchema.optional(),
   accessPolicy: accessPolicySchema.optional(),
+  model: modelIdSchema.optional(),
 });
 export type UpdatePolicyRequest = z.infer<typeof updatePolicyRequestSchema>;
 
@@ -156,6 +172,11 @@ export const agentEventSchema = z.discriminatedUnion("type", [
     type: z.literal("note.proposed"),
     runId: z.string(),
     proposal: noteProposalSchema,
+  }),
+  z.object({
+    type: z.literal("conversation.titled"),
+    conversationId: z.string(),
+    title: z.string(),
   }),
   z.object({
     type: z.literal("run.finished"),

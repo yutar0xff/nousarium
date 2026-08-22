@@ -54,4 +54,39 @@ describe("vault-fs", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it("excludes protected paths and ai_access excluded notes from search", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "nousarium-"));
+    try {
+      await initializeVault(dir);
+      const vault = createFsVault(dir);
+      await writeFile(
+        path.join(dir, "00_Inbox", "visible.md"),
+        `---
+ai_access: normal
+---
+
+hello world
+`,
+        "utf8",
+      );
+      await writeFile(
+        path.join(dir, "00_Inbox", "hidden.md"),
+        `---
+ai_access: excluded
+---
+
+secret phrase
+`,
+        "utf8",
+      );
+      await writeFile(path.join(dir, "_protected", "secret.md"), "protected phrase\n", "utf8");
+      const hits = await vault.search({ q: "phrase" });
+      expect(hits.map((hit) => hit.path)).toEqual([]);
+      const visible = await vault.search({ q: "hello" });
+      expect(visible.some((hit) => hit.path.endsWith("visible.md"))).toBe(true);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });

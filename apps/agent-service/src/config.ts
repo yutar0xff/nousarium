@@ -49,13 +49,7 @@ export function loadConfig() {
     runtimePath: resolveConfiguredPath(required("NOUSARIUM_RUNTIME_PATH", "./data/runtime")),
     appSecret: required("NOUSARIUM_APP_SECRET", "dev-secret"),
     cursorApiKey: process.env.CURSOR_API_KEY,
-    cursorModel: process.env.CURSOR_MODEL ?? "composer-2.5",
-    sandboxEnabled:
-      process.env.CURSOR_SANDBOX_ENABLED === "true"
-        ? true
-        : process.env.CURSOR_SANDBOX_ENABLED === "false"
-          ? false
-          : !existsSync("/.dockerenv"),
+    cursorModel: process.env.CURSOR_MODEL ?? "auto",
     webOrigin: process.env.WEB_ORIGIN ?? "http://127.0.0.1:3000",
   };
 }

@@ -20,7 +20,6 @@ const agent = createAgentPort({
   apiKey: config.cursorApiKey,
   model: config.cursorModel,
   storePath: `${config.runtimePath}/cursor-agents`,
-  sandboxEnabled: config.sandboxEnabled,
 });
 const app = createApp({ config, store, vault, git, agent });
 

@@ -135,6 +135,8 @@ export async function initializeVault(root: string): Promise<void> {
     "utf8",
   );
 
+  await writeFile(path.join(root, ".cursorignore"), "_protected/\n", "utf8");
+
   await writeFile(
     path.join(root, ".gitignore"),
     `.obsidian/workspace.json

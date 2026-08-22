@@ -1,9 +1,8 @@
 import type { SaveDocumentRequest, SearchHit, SearchQuery, VaultDocument, VaultEntry } from "@nousarium/contracts";
 import type { VaultPort } from "@nousarium/core";
-import { createReadStream } from "node:fs";
 import { mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { createInterface } from "node:readline";
+import { isAiExcludedMarkdown, isProtectedVaultPath } from "./access.js";
 import { hashContent } from "./hash.js";
 import { resolveVaultPath, toVaultRelative } from "./paths.js";
 
@@ -53,7 +52,12 @@ export function createFsVault(root: string): VaultPort {
       } catch {
         currentHash = null;
       }
-      if (input.expectedHash && currentHash && input.expectedHash !== currentHash) {
+      if (
+        !input.overwrite &&
+        input.expectedHash &&
+        currentHash &&
+        input.expectedHash !== currentHash
+      ) {
         throw new VaultConflictError(input.path, currentHash);
       }
       const temp = `${full}.${process.pid}.tmp`;
@@ -67,13 +71,14 @@ export function createFsVault(root: string): VaultPort {
       const limit = query.limit ?? 40;
       await walkMarkdown(root, async (relative, full) => {
         if (hits.length >= limit) return;
-        const stream = createReadStream(full, { encoding: "utf8" });
-        const rl = createInterface({ input: stream });
-        let lineNo = 0;
-        for await (const line of rl) {
-          lineNo += 1;
+        if (isProtectedVaultPath(relative)) return;
+        const content = await readFile(full, "utf8");
+        if (isAiExcludedMarkdown(content)) return;
+        const lines = content.split(/\r?\n/);
+        for (let lineNo = 0; lineNo < lines.length; lineNo += 1) {
+          const line = lines[lineNo] ?? "";
           if (line.includes(query.q)) {
-            hits.push({ path: relative, line: lineNo, preview: line.trim().slice(0, 240) });
+            hits.push({ path: relative, line: lineNo + 1, preview: line.trim().slice(0, 240) });
             if (hits.length >= limit) break;
           }
         }
@@ -102,8 +107,11 @@ async function walkMarkdown(root: string, visit: (relative: string, full: string
     for (const entry of entries) {
       if (entry.name === ".git" || entry.name === "node_modules") continue;
       const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) await walk(full);
-      else if (entry.name.endsWith(".md")) await visit(toVaultRelative(root, full), full);
+      const relative = toVaultRelative(root, full);
+      if (entry.isDirectory()) {
+        if (isProtectedVaultPath(relative)) continue;
+        await walk(full);
+      } else if (entry.name.endsWith(".md")) await visit(relative, full);
     }
   }
   await walk(root);

@@ -1,6 +1,6 @@
 import type { AgentEvent } from "@nousarium/contracts";
 import type { AgentInput, AgentPort } from "@nousarium/core";
-import { ACCESS_POLICY_LABELS, CONVERSATION_MODE_LABELS } from "@nousarium/core";
+import { ACCESS_POLICY_LABELS, CONVERSATION_INTENT_LABELS, CONVERSATION_MODE_LABELS, fallbackConversationTitle, promptForIntent } from "@nousarium/core";
 
 export function createScriptedAgentPort(): AgentPort {
   const cancelled = new Set<string>();
@@ -19,10 +19,10 @@ export function createScriptedAgentPort(): AgentPort {
       }
       const text =
         input.accessPolicy === "chat"
-          ? `Vault には触れず応答します。いまのモードは${CONVERSATION_MODE_LABELS[input.mode]}、権限は${ACCESS_POLICY_LABELS[input.accessPolicy]}です。\n\n${summarize(input.message)}`
+          ? `${promptForIntent(input.intent)}\n\nVault には触れず応答します。いまの用途は${CONVERSATION_INTENT_LABELS[input.intent]}、モードは${CONVERSATION_MODE_LABELS[input.mode]}、権限は${ACCESS_POLICY_LABELS[input.accessPolicy]}、モデルは ${input.model} です。\n\n${summarize(input.message)}`
           : input.accessPolicy === "read"
-            ? `Vault を参照する前提で整理します（CURSOR_API_KEY 未設定のため実ファイル検索はスクリプト応答です）。\n\n問い: ${input.message}`
-            : `Vault 作業権限です。新規ノート案は「この会話からノートを作成」から確認できます。\n\n問い: ${input.message}`;
+            ? `${promptForIntent(input.intent)}\n\nVault を参照する前提で整理します（CURSOR_API_KEY 未設定のため実ファイル検索はスクリプト応答です）。\n\n問い: ${input.message}`
+            : `${promptForIntent(input.intent)}\n\nVault 作業権限です。新規ノート案は「この会話からノートを作成」から確認できます。\n\n問い: ${input.message}`;
       for (const chunk of text.match(/.{1,48}/gs) ?? [text]) {
         if (cancelled.has(input.runId)) {
           yield { type: "run.finished", runId: input.runId, status: "cancelled" };
@@ -34,6 +34,9 @@ export function createScriptedAgentPort(): AgentPort {
     },
     async cancel(runId) {
       cancelled.add(runId);
+    },
+    async generateConversationTitle(message) {
+      return fallbackConversationTitle(message);
     },
   };
 }

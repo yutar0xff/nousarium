@@ -7,7 +7,6 @@ const result: Record<string, unknown> = {
   sdkImport: true,
   node: process.version,
   hasApiKey: Boolean(process.env.CURSOR_API_KEY),
-  sandboxInContainer: null,
   stream: null,
   resume: null,
   toolPolicy: null,
@@ -25,7 +24,6 @@ async function main() {
     result.stream = "skipped";
     result.resume = "skipped";
     result.toolPolicy = "skipped";
-    result.sandboxInContainer = "not exercised without API key";
     console.log(JSON.stringify(result, null, 2));
     return;
   }
@@ -37,14 +35,13 @@ async function main() {
   const base = {
     apiKey: process.env.CURSOR_API_KEY,
     model: { id: "composer-2.5" as const },
-    local: { cwd, sandboxOptions: { enabled: true } },
+    local: { cwd, sandboxOptions: { enabled: false } },
     tools: ["read", "grep", "glob", "ls"],
     mode: "plan" as const,
   };
 
   try {
     await using agent = await Agent.create(base);
-    result.sandboxInContainer = "enabled";
     const run = await agent.send("hello.md の見出しを一文で答えて。ファイルは変更しない。", { mode: "plan" });
     let chunks = 0;
     for await (const event of run.stream()) {
@@ -61,7 +58,6 @@ async function main() {
     result.toolPolicy = { tools: base.tools, appliedOnResume: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    result.sandboxInContainer = message;
     result.stream = result.stream ?? "failed";
     result.notes = [...(result.notes as string[]), message];
   }

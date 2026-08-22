@@ -9,7 +9,7 @@ import {
   sendMessageRequestSchema,
   updatePolicyRequestSchema,
 } from "@nousarium/contracts";
-import { applyPendingPolicy, buildNoteProposal, snapshotPolicy } from "@nousarium/core";
+import { applyPendingPolicy, buildNoteProposal, CONVERSATION_TITLE_PLACEHOLDER, DEFAULT_INTENT_SETTINGS, MODEL_OPTIONS, needsGeneratedTitle, snapshotPolicy } from "@nousarium/core";
 import type { AgentPort, ConversationStore, VaultPort, VersionControlPort } from "@nousarium/core";
 import { VaultConflictError } from "@nousarium/vault-fs";
 import { authMiddleware, signToken } from "./auth.js";
@@ -50,14 +50,24 @@ export function createApp(input: {
 
   app.post("/login", async (c) => c.json({ token: signToken(config.appSecret, "owner") }));
 
+  app.get("/models", (c) =>
+    c.json({
+      default: config.cursorModel,
+      models: MODEL_OPTIONS,
+    }),
+  );
+
   app.get("/conversations", async (c) => c.json(await store.listConversations()));
 
   app.post("/conversations", async (c) => {
     const body = createConversationRequestSchema.parse(await c.req.json());
+    const defaults = DEFAULT_INTENT_SETTINGS[body.intent];
     const conversation = await store.createConversation({
-      title: body.title?.trim() || "新しい対話",
-      mode: body.mode,
-      accessPolicy: body.accessPolicy,
+      title: body.title?.trim() || CONVERSATION_TITLE_PLACEHOLDER,
+      intent: body.intent,
+      model: body.model,
+      mode: body.mode ?? defaults.mode,
+      accessPolicy: body.accessPolicy ?? defaults.accessPolicy,
     });
     return c.json(conversation);
   });
@@ -93,7 +103,7 @@ export function createApp(input: {
           await stream.writeSSE({ data: JSON.stringify({ type: "run.finished", runId: "", status: "error", error: "not found" }) });
           return;
         }
-        if (body.mode || body.accessPolicy) {
+        if (body.mode || body.accessPolicy || body.model) {
           conversation = await store.updateConversation(
             conversation.id,
             applyPendingPolicy(conversation, body, false),
@@ -103,8 +113,10 @@ export function createApp(input: {
         conversation = await store.updateConversation(conversation.id, {
           mode: policy.mode,
           accessPolicy: policy.accessPolicy,
+          model: policy.model,
           pendingMode: null,
           pendingAccessPolicy: null,
+          pendingModel: null,
         });
         const userMessage = await store.addMessage({
           conversationId,
@@ -114,9 +126,12 @@ export function createApp(input: {
           mode: policy.mode,
           accessPolicy: policy.accessPolicy,
         });
-        if (conversation.title === "新しい対話") {
-          conversation = await store.updateConversation(conversation.id, {
-            title: body.content.slice(0, 40),
+        const userTurns = (await store.listMessages(conversationId)).filter((message) => message.role === "user").length;
+        if (userTurns === 1 && needsGeneratedTitle(conversation.title)) {
+          const title = await agent.generateConversationTitle(body.content, policy.model);
+          conversation = await store.updateConversation(conversation.id, { title });
+          await stream.writeSSE({
+            data: JSON.stringify({ type: "conversation.titled", conversationId: conversation.id, title }),
           });
         }
         const runId = crypto.randomUUID();
@@ -131,6 +146,8 @@ export function createApp(input: {
             id: runId,
             conversationId,
             status: "running",
+            intent: conversation.intent,
+            model: policy.model,
             mode: policy.mode,
             accessPolicy: policy.accessPolicy,
             gitBefore,
@@ -146,6 +163,8 @@ export function createApp(input: {
               runId,
               message: userMessage.content,
               history,
+              intent: conversation.intent,
+              model: policy.model,
               mode: policy.mode,
               accessPolicy: policy.accessPolicy,
               vaultPath: config.vaultPath,
@@ -200,6 +219,16 @@ export function createApp(input: {
             gitAfter,
             finishedAt: new Date().toISOString(),
           });
+          if (agentStatus === "finished") {
+            const proposal = buildNoteProposal({
+              title: conversation.title,
+              directory: "00_Inbox",
+              messages: all,
+            });
+            await stream.writeSSE({
+              data: JSON.stringify({ type: "note.proposed", runId, proposal }),
+            });
+          }
           await stream.writeSSE({
             data: JSON.stringify({
               type: "run.finished",

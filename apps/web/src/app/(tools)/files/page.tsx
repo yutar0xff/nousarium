@@ -3,8 +3,9 @@
 import type { SearchHit, VaultDocument, VaultEntry } from "@nousarium/contracts";
 import { Button, Field } from "@nousarium/ui";
 import { useEffect, useState } from "react";
-import { MarkdownEditor } from "../../features/editor/markdown-editor";
-import { api } from "../../lib/api";
+import { MarkdownEditor } from "../../../features/editor/markdown-editor";
+import { api } from "../../../lib/api";
+import { ConflictPanel, parseVaultConflict } from "../../../components/conflict-panel";
 
 export default function FilesPage() {
   const [prefix, setPrefix] = useState("");
@@ -13,6 +14,8 @@ export default function FilesPage() {
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [doc, setDoc] = useState<VaultDocument | null>(null);
   const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+  const [conflict, setConflict] = useState<{ local: VaultDocument; disk: VaultDocument } | null>(null);
 
   async function load(path = prefix) {
     setEntries(await api<VaultEntry[]>(`/vault/tree?path=${encodeURIComponent(path)}`));
@@ -21,6 +24,33 @@ export default function FilesPage() {
   useEffect(() => {
     void load("");
   }, []);
+
+  async function saveDocument(target: VaultDocument, overwrite = false) {
+    setError("");
+    setSaved(false);
+    try {
+      const savedDoc = await api<VaultDocument>("/vault/file", {
+        method: "PUT",
+        body: JSON.stringify({
+          path: target.path,
+          content: target.content,
+          expectedHash: overwrite ? null : target.hash,
+          overwrite,
+        }),
+      });
+      setDoc(savedDoc);
+      setConflict(null);
+      setSaved(true);
+    } catch (err) {
+      const payload = parseVaultConflict(err);
+      if (payload && doc) {
+        const disk = await api<VaultDocument>(`/vault/file?path=${encodeURIComponent(payload.path)}`);
+        setConflict({ local: doc, disk });
+        return;
+      }
+      setError(err instanceof Error ? err.message : "保存に失敗しました");
+    }
+  }
 
   return (
     <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
@@ -51,6 +81,8 @@ export default function FilesPage() {
                   await load(entry.path);
                 } else {
                   setDoc(await api<VaultDocument>(`/vault/file?path=${encodeURIComponent(entry.path)}`));
+                  setConflict(null);
+                  setSaved(false);
                 }
               }}
             >
@@ -63,35 +95,44 @@ export default function FilesPage() {
             key={`${hit.path}:${hit.line}`}
             type="button"
             className="text-left text-xs text-text-secondary"
-            onClick={async () => setDoc(await api<VaultDocument>(`/vault/file?path=${encodeURIComponent(hit.path)}`))}
+            onClick={async () => {
+              setDoc(await api<VaultDocument>(`/vault/file?path=${encodeURIComponent(hit.path)}`));
+              setConflict(null);
+              setSaved(false);
+            }}
           >
             {hit.path}:{hit.line} {hit.preview}
           </button>
         ))}
       </aside>
-      <section>
+      <section className="flex flex-col gap-3">
         {doc ? (
-          <div className="flex flex-col gap-3">
+          <>
             <h1 className="text-lg font-semibold">{doc.path}</h1>
             {error ? <p className="text-sm text-danger">{error}</p> : null}
-            <MarkdownEditor value={doc.content} onChange={(content) => setDoc({ ...doc, content })} />
-            <Button
-              onClick={async () => {
-                setError("");
-                try {
-                  const saved = await api<VaultDocument>("/vault/file", {
-                    method: "PUT",
-                    body: JSON.stringify({ path: doc.path, content: doc.content, expectedHash: doc.hash }),
-                  });
-                  setDoc(saved);
-                } catch (err) {
-                  setError(err instanceof Error ? err.message : "保存に失敗しました");
-                }
+            {saved ? <p className="text-sm text-success">保存しました</p> : null}
+            {conflict ? (
+              <ConflictPanel
+                path={conflict.local.path}
+                localContent={conflict.local.content}
+                disk={conflict.disk}
+                onKeepLocal={() => void saveDocument(conflict.local, true)}
+                onUseDisk={() => {
+                  setDoc(conflict.disk);
+                  setConflict(null);
+                }}
+                onDismiss={() => setConflict(null)}
+              />
+            ) : null}
+            <MarkdownEditor
+              value={doc.content}
+              onChange={(content) => {
+                setDoc({ ...doc, content });
+                setSaved(false);
               }}
-            >
-              保存
-            </Button>
-          </div>
+            />
+            <Button onClick={() => void saveDocument(doc)}>保存</Button>
+          </>
         ) : (
           <p className="text-sm text-text-secondary">ノートを選ぶと編集できます。</p>
         )}

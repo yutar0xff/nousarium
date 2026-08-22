@@ -112,7 +112,11 @@ review_after:
 
 ## 対話ログ
 
-パス例: `10_Journal/Conversations/2026/08/2026-08-22 1620 - Vault整理.md`
+パス例: `10_Journal/Conversations/2026/08/20260822T162045-vault_整理.md`
+
+ファイル名の先頭タイムスタンプは ISO 8601 基本形式（`YYYYMMDDTHHMMSS`）。Frontmatter の `created` / `updated` は `YYYY-MM-DD` のまま。
+
+ファイル名の区切り: `-` はタイムスタンプとタイトルなど役割の境界、`_` はタイトル内の単語区切り。
 
 - `type: conversation`
 - `status: raw`

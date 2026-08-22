@@ -24,6 +24,7 @@ export async function appendJournal(
 id: ${conversation.id}
 type: conversation
 status: raw
+intent: ${conversation.intent}
 created: ${conversation.createdAt.slice(0, 10)}
 updated: ${new Date().toISOString().slice(0, 10)}
 aliases: []
@@ -42,6 +43,14 @@ retention: permanent
 ${body}
 `;
 
-  await vault.save({ path: relative, content, expectedHash: null });
+  let expectedHash: string | null = null;
+  try {
+    const existing = await vault.read(relative);
+    expectedHash = existing.hash;
+  } catch {
+    expectedHash = null;
+  }
+
+  await vault.save({ path: relative, content, expectedHash });
   return relative;
 }

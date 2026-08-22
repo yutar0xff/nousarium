@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 
-export function Shell({ children }: { children: ReactNode }) {
+export function ToolsShell({ children }: { children: ReactNode }) {
   return (
     <div className="mx-auto flex min-h-dvh max-w-6xl flex-col">
       <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-stroke bg-surface px-4 py-3">

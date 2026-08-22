@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "@nousarium/contracts": "workspace:*",
-    "@nousarium/core": "workspace:*"
+    "@nousarium/core": "workspace:*",
+    "@nousarium/markdown": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

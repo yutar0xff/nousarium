@@ -2,6 +2,7 @@ import type {
   AccessPolicy,
   AgentEvent,
   Conversation,
+  ConversationIntent,
   ConversationMode,
   FileDiff,
   Message,
@@ -18,6 +19,8 @@ export interface AgentInput {
   runId: string;
   message: string;
   history: Message[];
+  intent: ConversationIntent;
+  model: string;
   mode: ConversationMode;
   accessPolicy: AccessPolicy;
   vaultPath: string;
@@ -26,6 +29,7 @@ export interface AgentInput {
 export interface AgentPort {
   send(input: AgentInput): AsyncIterable<AgentEvent>;
   cancel(runId: string): Promise<void>;
+  generateConversationTitle(message: string, model?: string): Promise<string>;
 }
 
 export interface VaultPort {
@@ -51,6 +55,8 @@ export interface ConversationStore {
   getConversation(id: string): Promise<Conversation | null>;
   createConversation(input: {
     title: string;
+    intent: ConversationIntent;
+    model: string;
     mode: ConversationMode;
     accessPolicy: AccessPolicy;
   }): Promise<Conversation>;

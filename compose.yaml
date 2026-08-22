@@ -24,8 +24,7 @@ services:
       NOUSARIUM_RUNTIME_PATH: /runtime
       NOUSARIUM_APP_SECRET: ${NOUSARIUM_APP_SECRET}
       CURSOR_API_KEY: ${CURSOR_API_KEY}
-      CURSOR_MODEL: ${CURSOR_MODEL:-composer-2.5}
-      CURSOR_SANDBOX_ENABLED: ${CURSOR_SANDBOX_ENABLED:-false}
+      CURSOR_MODEL: ${CURSOR_MODEL:-auto}
       WEB_ORIGIN: ${WEB_ORIGIN:-http://127.0.0.1:13000}
     volumes:
       - ${NOUSARIUM_VAULT_PATH:-./data/vault}:/vault
