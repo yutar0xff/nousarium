@@ -66,6 +66,7 @@ export type VaultDocument = z.infer<typeof vaultDocumentSchema>;
 export const searchQuerySchema = z.object({
   q: z.string().min(1),
   limit: z.number().int().min(1).max(100).optional(),
+  prefix: z.string().optional(),
 });
 export type SearchQuery = z.infer<typeof searchQuerySchema>;
 
@@ -75,6 +76,20 @@ export const searchHitSchema = z.object({
   preview: z.string(),
 });
 export type SearchHit = z.infer<typeof searchHitSchema>;
+
+export const noteConversationLinkSchema = z.object({
+  conversationId: z.string().nullable(),
+  title: z.string(),
+  journalPath: z.string(),
+  updatedAt: z.string().nullable(),
+});
+export type NoteConversationLink = z.infer<typeof noteConversationLinkSchema>;
+
+export const noteRelationsSchema = z.object({
+  edited: z.array(noteConversationLinkSchema),
+  referenced: z.array(noteConversationLinkSchema),
+});
+export type NoteRelations = z.infer<typeof noteRelationsSchema>;
 
 export const saveDocumentRequestSchema = z.object({
   path: z.string().min(1),
@@ -110,12 +125,20 @@ export const updatePolicyRequestSchema = z.object({
 });
 export type UpdatePolicyRequest = z.infer<typeof updatePolicyRequestSchema>;
 
+export const runStatusPhaseSchema = z.enum(["sending", "titling", "checkpoint", "starting", "thinking"]);
+export type RunStatusPhase = z.infer<typeof runStatusPhaseSchema>;
+
 export const agentEventSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("run.started"),
     runId: z.string(),
     conversationId: z.string(),
     accessPolicy: accessPolicySchema,
+  }),
+  z.object({
+    type: z.literal("run.status"),
+    runId: z.string(),
+    phase: runStatusPhaseSchema,
   }),
   z.object({
     type: z.literal("agent.bound"),

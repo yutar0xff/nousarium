@@ -20,7 +20,8 @@ export function MarkdownPreview({
     if (knownNotes.length > 0) {
       const names = new Set(knownNotes);
       rendered = rendered.replace(/class="wikilink" data-target="([^"]+)"/g, (all, target: string) => {
-        return names.has(target) ? all : all.replace('class="wikilink"', 'class="wikilink is-missing"');
+        if (target.includes("/") || names.has(target)) return all;
+        return all.replace('class="wikilink"', 'class="wikilink is-missing"');
       });
     }
     return rendered;

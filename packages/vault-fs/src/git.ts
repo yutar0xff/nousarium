@@ -6,9 +6,9 @@ import { promisify } from "node:util";
 const exec = promisify(execFile);
 
 export function createGitVersionControl(root: string): VersionControlPort {
-  async function git(args: string[]): Promise<string> {
+  async function git(args: string[], raw = false): Promise<string> {
     const { stdout } = await exec("git", args, { cwd: root, maxBuffer: 8 * 1024 * 1024 });
-    return stdout.trim();
+    return raw ? stdout : stdout.trim();
   }
 
   return {
@@ -27,6 +27,24 @@ export function createGitVersionControl(root: string): VersionControlPort {
         return await git(["rev-parse", "HEAD"]);
       } catch {
         return null;
+      }
+    },
+
+    async changedPaths(from: string) {
+      await this.ensureRepo();
+      await git(["add", "-A"]);
+      if (!from) {
+        const status = await git(["status", "-z", "--porcelain"], true);
+        return status
+          .split("\0")
+          .map((line) => line.slice(3).trim())
+          .filter(Boolean);
+      }
+      try {
+        const raw = await git(["diff", "-z", "--name-only", "--cached", from], true);
+        return raw.split("\0").map((line) => line.trim()).filter(Boolean);
+      } catch {
+        return [];
       }
     },
 

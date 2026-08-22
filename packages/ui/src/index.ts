@@ -25,4 +25,6 @@ export {
   ChevronDownIcon,
   ChevronRightIcon,
   FolderIcon,
+  SplitPaneIcon,
+  SinglePaneIcon,
 } from "./icons";

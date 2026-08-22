@@ -142,6 +142,7 @@ const AGENTS_MD = `# Nousarium
 - \`System/\` の語彙（第1段タグ、type の値）を勝手に増やす。提案して承認を待つ
 - 矛盾する主張の一方を削除する。両方残し \`contradicts:\` で繋ぐ
 - \`status: stable\` のノート本文を書き換える。提案として応答に書き、指示を待つ
+- ノートの \`derived-from:\` 行を消す。システムが書く関係であり、対話との接続に使う
 - \`git push\`、\`reset --hard\`、\`clean\`、外部への通信
 `;
 
@@ -161,6 +162,7 @@ alwaysApply: false
 - \`type\` は多値。語彙は \`System/Schemas/properties.md\`
 - タグを付ける前に \`System/Schemas/tags.md\` を読む
 - 関係は本文の「関係」に \`supports:\` \`contradicts:\` \`derived-from:\` で書く
+- \`derived-from:\` はシステムが書く。消さない
 - 新規作成時は \`System/Templates/\` の対応する雛形を読む。複数 type なら該当する節を合成する
 `;
 
@@ -173,7 +175,9 @@ alwaysApply: false
 # Journal
 
 \`Journal/Conversations/\` の対話本文はシステムが追記する。読んでもよいが、書き換えない。
+\`conversation_id\` と「参照・更新したノート」もシステムが書く。
 再利用する知識は \`Notes/\` へ抽出し、ログから Wikilink する。
+ノートの \`derived-from:\` 行は消さない。
 `;
 
 const SYSTEM_RULE = `---
@@ -287,8 +291,8 @@ export async function initializeVault(root: string): Promise<void> {
       `# 決定\n\n## 決めたこと\n\n## 理由\n\n## 見直し条件\n\n## 関係\n`,
     ),
     "conversation.md": note(
-      { type: ["conversation"], status: "raw", retention: "permanent" },
-      `# 対話\n\n## 要約\n\n## 得られた示唆\n\n## 未解決の疑問\n\n## 抽出されたノート\n\n## 対話ログ\n`,
+      { type: ["conversation"], status: "raw", retention: "permanent", conversation_id: "" },
+      `# 対話\n\n## 要約\n\n## 得られた示唆\n\n## 未解決の疑問\n\n## 参照・更新したノート\n\n## 対話ログ\n`,
     ),
     "map.md": note(
       { type: ["map"], status: "seed" },

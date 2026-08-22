@@ -14,4 +14,5 @@ alwaysApply: false
 - `type` は多値。語彙は `System/Schemas/properties.md`
 - タグを付ける前に `System/Schemas/tags.md` を読む
 - 関係は本文の「関係」に `supports:` `contradicts:` `derived-from:` で書く
+- `derived-from:` はシステムが書く。消さない
 - 新規作成時は `System/Templates/` の対応する雛形を読む。複数 type なら該当する節を合成する

@@ -52,6 +52,12 @@ export function createSqliteStore(runtimePath: string): ConversationStore {
       const row = db.prepare("SELECT * FROM conversations WHERE id = ?").get(id) as Record<string, unknown> | undefined;
       return row ? mapConversation(row) : null;
     },
+    async getConversationByJournalPath(journalPath) {
+      const row = db
+        .prepare("SELECT * FROM conversations WHERE journal_path = ?")
+        .get(journalPath) as Record<string, unknown> | undefined;
+      return row ? mapConversation(row) : null;
+    },
     async createConversation(input) {
       const now = new Date().toISOString();
       const conversation: Conversation = {

@@ -8,6 +8,7 @@ created: 2026-08-22
 updated: 2026-08-22
 ai_access: normal
 retention: permanent
+conversation_id:
 ---
 
 # 対話
@@ -18,6 +19,6 @@ retention: permanent
 
 ## 未解決の疑問
 
-## 抽出されたノート
+## 参照・更新したノート
 
 ## 対話ログ

@@ -1,27 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { readStorage, writeStorage } from "./browser-storage";
 
 const SIDEBAR_KEY = "nousarium-sidebar";
 const DESKTOP_QUERY = "(min-width: 768px)";
 
 function readOpen(): boolean {
-  try {
-    const value = localStorage.getItem(SIDEBAR_KEY);
-    if (value === "closed") return false;
-    if (value === "open") return true;
-  } catch {
-    // ignore
-  }
+  const value = readStorage(SIDEBAR_KEY);
+  if (value === "closed") return false;
+  if (value === "open") return true;
   return true;
-}
-
-function writeOpen(open: boolean) {
-  try {
-    localStorage.setItem(SIDEBAR_KEY, open ? "open" : "closed");
-  } catch {
-    // ignore
-  }
 }
 
 export function sidebarActionLabel(onFiles: boolean, action: "open" | "close") {
@@ -48,7 +37,7 @@ export function useSidebar() {
 
   function setDesktopOpen(next: boolean) {
     setOpen(next);
-    writeOpen(next);
+    writeStorage(SIDEBAR_KEY, next ? "open" : "closed");
   }
 
   function onMenuClick() {

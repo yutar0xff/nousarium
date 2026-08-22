@@ -141,15 +141,21 @@ body {
   line-height: 1.4;
 }
 
+.cm-theme,
+.cm-editor {
+  height: 100%;
+  max-height: 100%;
+}
+
 .cm-editor {
   background: var(--color-surface-elevated);
   color: var(--color-text-primary);
   font-size: 1rem;
-  height: 100%;
 }
 
 .cm-editor .cm-scroller {
   font-family: var(--font-mono);
+  overflow: auto;
   padding: 0.75rem;
 }
 

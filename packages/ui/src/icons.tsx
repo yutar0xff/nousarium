@@ -135,3 +135,20 @@ export function FolderIcon(props: IconProps) {
     </Icon>
   );
 }
+
+export function SplitPaneIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="4" y="5" width="16" height="14" rx="1.5" />
+      <path d="M12 5v14" />
+    </Icon>
+  );
+}
+
+export function SinglePaneIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="6" y="5" width="12" height="14" rx="1.5" />
+    </Icon>
+  );
+}

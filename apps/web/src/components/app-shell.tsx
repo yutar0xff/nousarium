@@ -191,7 +191,11 @@ export function AppShell({ children }: { children: ReactNode }) {
               <OverflowMenu />
             </div>
           </header>
-          {chat?.pending ? (
+          {chat?.status ? (
+            <p className="border-b border-accent-soft bg-accent-soft px-4 py-1 text-center text-caption text-accent">
+              {chat.status}
+            </p>
+          ) : chat?.pending ? (
             <p className="border-b border-warning-soft bg-warning-soft px-4 py-1 text-center text-caption text-warning">
               {chat.pending}
             </p>

@@ -1,6 +1,6 @@
 "use client";
 
-import type { VaultDocument } from "@nousarium/contracts";
+import type { NoteRelations, VaultDocument } from "@nousarium/contracts";
 import { parseFrontmatter } from "@nousarium/markdown";
 import { BackIcon, Button, EmptyState, IconButton, Pill, useToast } from "@nousarium/ui";
 import Link from "next/link";
@@ -38,6 +38,7 @@ function FilesWorkspace() {
   const [error, setError] = useState("");
   const [conflict, setConflict] = useState<{ local: VaultDocument; disk: VaultDocument } | null>(null);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
+  const [relations, setRelations] = useState<NoteRelations | null>(null);
 
   const visible = useMemo(() => notesInSelection(items, { tag, untagged }), [items, tag, untagged]);
 
@@ -57,17 +58,22 @@ function FilesWorkspace() {
       setConflict(null);
       setError("");
       setPropertiesOpen(false);
+      setRelations(null);
       return;
     }
     let cancelled = false;
     void (async () => {
       try {
-        const file = await api<VaultDocument>(`/vault/file?path=${encodeURIComponent(notePath)}`);
+        const [file, linked] = await Promise.all([
+          api<VaultDocument>(`/vault/file?path=${encodeURIComponent(notePath)}`),
+          api<NoteRelations>(`/notes/relations?path=${encodeURIComponent(notePath)}`).catch(() => null),
+        ]);
         if (cancelled) return;
         setDoc(file);
         setConflict(null);
         setError("");
         setPropertiesOpen(false);
+        setRelations(linked);
         const { data, body } = parseFrontmatter(file.content);
         setTitle(titleFrom(file.path, body, data.aliases));
       } catch (err) {
@@ -152,10 +158,10 @@ function FilesWorkspace() {
   }
 
   return (
-    <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col gap-2 p-3 md:gap-3 md:p-4">
+    <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden p-3 md:gap-3 md:p-4">
       {doc ? (
         <>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <IconButton label="一覧に戻る" onClick={closeNote}>
               <BackIcon />
             </IconButton>
@@ -176,7 +182,7 @@ function FilesWorkspace() {
             />
           ) : null}
           <details
-            className="rounded-xl border border-stroke bg-surface-elevated"
+            className="shrink-0 rounded-xl border border-stroke bg-surface-elevated"
             open={propertiesOpen}
             onToggle={(event) => setPropertiesOpen((event.target as HTMLDetailsElement).open)}
           >
@@ -194,6 +200,7 @@ function FilesWorkspace() {
               </table>
             </div>
           </details>
+          <RelatedConversations path={notePath} relations={relations} />
           <MarkdownEditor
             value={doc.content}
             knownNotes={knownNotes}
@@ -201,7 +208,9 @@ function FilesWorkspace() {
               setDoc({ ...doc, content });
             }}
           />
-          <Button onClick={() => void saveDocument(doc)}>保存</Button>
+          <Button className="shrink-0" onClick={() => void saveDocument(doc)}>
+            保存
+          </Button>
         </>
       ) : error ? (
         <p className="text-ui text-danger">{error}</p>
@@ -209,6 +218,56 @@ function FilesWorkspace() {
         <p className="text-ui text-text-secondary">読み込み中…</p>
       )}
     </section>
+  );
+}
+
+function RelatedConversations({ path, relations }: { path: string | null; relations: NoteRelations | null }) {
+  if (!path) return null;
+  return (
+    <section className="max-h-[28%] shrink-0 space-y-3 overflow-y-auto rounded-xl border border-stroke bg-surface-elevated px-3 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-ui font-medium">関連する対話</h2>
+        <Link href={`/?note=${encodeURIComponent(path)}`} className="text-caption text-accent hover:underline">
+          このノートについて話す
+        </Link>
+      </div>
+      {relations && (relations.edited.length > 0 || relations.referenced.length > 0) ? (
+        <div className="space-y-3">
+          <RelationGroup label="更新した対話" items={relations.edited} />
+          <RelationGroup label="参照した対話" items={relations.referenced} />
+        </div>
+      ) : (
+        <p className="text-caption text-text-muted">まだ関連する対話はありません。</p>
+      )}
+    </section>
+  );
+}
+
+function RelationGroup({
+  label,
+  items,
+}: {
+  label: string;
+  items: NoteRelations["edited"];
+}) {
+  if (items.length === 0) return null;
+  return (
+    <div>
+      <p className="mb-1 text-caption text-text-muted">{label}</p>
+      <ul className="space-y-1">
+        {items.map((item) => (
+          <li key={item.journalPath}>
+            {item.conversationId ? (
+              <Link href={`/c/${item.conversationId}`} className="text-ui text-accent hover:underline">
+                {item.title}
+              </Link>
+            ) : (
+              <span className="text-ui text-text-secondary">{item.title}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

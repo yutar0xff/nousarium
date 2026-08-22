@@ -2,6 +2,7 @@
 
 import type { AccessPolicy, AgentEvent, Conversation, FileDiff, Message, VaultDocument } from "@nousarium/contracts";
 import { DEFAULT_ACCESS_POLICY } from "@nousarium/core";
+import { isJournalPath, noteTitleFromPath, resolveWikiTarget } from "@nousarium/markdown";
 import {
   Button,
   ChevronDownIcon,
@@ -12,9 +13,11 @@ import {
   Switch,
   Textarea,
 } from "@nousarium/ui";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { api, streamMessage } from "../lib/api";
 import { consumeNewConversationRequest, NEW_CONVERSATION } from "../lib/new-conversation";
+import { RUN_STATUS_LABELS, runStatusLabel, toolStatusLabel } from "../lib/run-status";
 import { replaceConversationPath } from "../lib/pathname";
 import { MarkdownPreview } from "../features/editor/preview";
 import { DiffView, summarizeDiffs } from "./diff-view";
@@ -45,16 +48,12 @@ function UserBubble({ content }: { content: string }) {
 }
 
 function isJournalDiff(diff: FileDiff) {
-  return diff.path.startsWith("Journal/Conversations/");
-}
-
-function notePathFromTarget(target: string) {
-  const name = target.replace(/\.md$/, "");
-  return `Notes/${name}.md`;
+  return isJournalPath(diff.path);
 }
 
 export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
   const { setTitle, setChat } = useChrome();
+  const router = useRouter();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -62,6 +61,7 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
   const [runId, setRunId] = useState<string | null>(null);
   const [finishedRunId, setFinishedRunId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [waitLabel, setWaitLabel] = useState<string | null>(null);
   const [runDiffs, setRunDiffs] = useState<FileDiff[]>([]);
   const [retryContent, setRetryContent] = useState<string | null>(null);
   const [model, setModel] = useState("auto");
@@ -72,11 +72,14 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
   const [preview, setPreview] = useState<VaultDocument | null>(null);
   const [knownNotes, setKnownNotes] = useState<string[]>([]);
   const bottom = useRef<HTMLDivElement>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const followOutputRef = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const hydratedIdRef = useRef<string | null>(null);
   const prevConversationIdRef = useRef<string | undefined>(conversationId);
   const streamGen = useRef(0);
   const skipLoadRef = useRef(false);
+  const seededNoteRef = useRef(false);
 
   const activeConversationId = conversationId ?? conversation?.id;
   const isNewChat = !activeConversationId;
@@ -88,6 +91,10 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
   const noteDiffs = runDiffs.filter((diff) => !isJournalDiff(diff));
   const journalDiffs = runDiffs.filter(isJournalDiff);
   const showWelcome = isNewChat && messages.length === 0 && !busy;
+  const hasAssistantContent = messages.some(
+    (message) => message.role === "assistant" && message.runId === runId && message.content,
+  );
+  const showWait = Boolean(busy && waitLabel && !hasAssistantContent && tools.length === 0);
   const diffSummary = summarizeDiffs(noteDiffs);
 
   async function load(id: string) {
@@ -111,6 +118,8 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
     setContextOpen(false);
     setInput("");
     setBusy(false);
+    setWaitLabel(null);
+    followOutputRef.current = true;
     if (textareaRef.current) textareaRef.current.style.height = "";
   }
 
@@ -179,8 +188,37 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
   }, []);
 
   useEffect(() => {
+    if (conversationId || seededNoteRef.current) return;
+    const note = new URLSearchParams(window.location.search).get("note");
+    if (!note) return;
+    seededNoteRef.current = true;
+    setInput(`[[${noteTitleFromPath(note)}]]\n`);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      const end = el.value.length;
+      el.setSelectionRange(end, end);
+      resizeTextarea();
+    });
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (!followOutputRef.current) return;
     bottom.current?.scrollIntoView({ block: "end" });
-  }, [messages, tools]);
+  }, [messages, tools, waitLabel]);
+
+  function resumeFollow() {
+    followOutputRef.current = true;
+  }
+
+  function onScrollerScroll() {
+    if (!busy) return;
+    const el = scrollerRef.current;
+    if (!el) return;
+    const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (gap > 80) followOutputRef.current = false;
+  }
 
   useEffect(() => {
     void api<{ name: string; kind: string }[]>("/vault/tree?path=Notes")
@@ -206,8 +244,9 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
       excluded,
       onExclude: () => void excludeJournal(),
       pending,
+      status: busy ? waitLabel : null,
     });
-  }, [activeConversationId, currentModel, excluded, pending, conversation?.id]);
+  }, [activeConversationId, currentModel, excluded, pending, conversation?.id, busy, waitLabel]);
 
   useEffect(() => {
     return () => setChat(null);
@@ -243,7 +282,9 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
   async function sendMessage(content: string, targetId = activeConversationId, syncUrl = false) {
     if (!targetId) return;
     const gen = ++streamGen.current;
+    resumeFollow();
     setBusy(true);
+    setWaitLabel(RUN_STATUS_LABELS.sending);
     let failed = false;
     try {
       setTools([]);
@@ -265,23 +306,33 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
       await streamMessage(targetId, { content }, (raw) => {
         if (gen !== streamGen.current) return;
         const event = raw as AgentEvent;
+        if (event.type === "run.status") {
+          setWaitLabel(runStatusLabel(event.phase));
+        }
         if (event.type === "run.started") {
           setRunId(event.runId);
+          setWaitLabel(RUN_STATUS_LABELS.starting);
           upsertAssistantMessage(event.runId, targetId, "", {
             accessPolicy: conversation?.accessPolicy ?? accessPolicy,
           });
         }
+        if (event.type === "agent.bound") {
+          setWaitLabel(RUN_STATUS_LABELS.thinking);
+        }
         if (event.type === "assistant.delta") {
           assembled += event.text;
+          setWaitLabel(null);
           upsertAssistantMessage(event.runId, targetId, assembled);
         }
         if (event.type === "tool.started") {
+          setWaitLabel(toolStatusLabel(event.tool));
           setTools((current) => [
             ...current,
             { id: `${event.runId}-${current.length}`, tool: event.tool, detail: event.detail, status: "started" },
           ]);
         }
         if (event.type === "tool.completed") {
+          if (!assembled) setWaitLabel(RUN_STATUS_LABELS.thinking);
           setTools((current) => {
             const index = [...current].reverse().findIndex((row) => row.tool === event.tool && row.status === "started");
             if (index < 0) {
@@ -298,6 +349,7 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
           notifyConversationsChanged();
         }
         if (event.type === "run.finished") {
+          setWaitLabel(null);
           if (event.status === "error" && event.error) {
             failed = true;
             setRetryContent(content);
@@ -330,6 +382,7 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
         replaceConversationPath(targetId);
       }
       setBusy(false);
+      setWaitLabel(null);
     }
   }
 
@@ -340,8 +393,16 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
     if (textareaRef.current) {
       textareaRef.current.style.height = "";
     }
-    const activeId = await ensureConversation();
-    await sendMessage(content, activeId, !conversationId);
+    resumeFollow();
+    setBusy(true);
+    setWaitLabel(RUN_STATUS_LABELS.sending);
+    try {
+      const activeId = await ensureConversation();
+      await sendMessage(content, activeId, !conversationId);
+    } catch {
+      setBusy(false);
+      setWaitLabel(null);
+    }
   }
 
   async function revertLastRun() {
@@ -378,13 +439,28 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
     }
   }
 
-  async function openNote(target: string) {
+  async function openWikiTarget(target: string) {
+    const path = resolveWikiTarget(target);
+    if (isJournalPath(path)) {
+      try {
+        const found = await api<{ conversation: Conversation | null }>(
+          `/conversations/by-journal?path=${encodeURIComponent(path)}`,
+        );
+        if (found.conversation) {
+          router.push(`/c/${found.conversation.id}`);
+          return;
+        }
+      } catch {
+        return;
+      }
+      return;
+    }
     try {
-      const doc = await api<VaultDocument>(`/vault/file?path=${encodeURIComponent(notePathFromTarget(target))}`);
+      const doc = await api<VaultDocument>(`/vault/file?path=${encodeURIComponent(path)}`);
       setPreview(doc);
       setContextOpen(true);
     } catch {
-      setPreview({ path: notePathFromTarget(target), content: "", hash: "" });
+      setPreview({ path, content: "", hash: "" });
       setContextOpen(true);
     }
   }
@@ -393,7 +469,7 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
     <div className="flex h-full flex-col gap-4 overflow-y-auto p-4">
       {preview ? (
         <section>
-          <h2 className="mb-2 text-heading font-medium">{preview.path.replace(/^Notes\//, "").replace(/\.md$/, "")}</h2>
+          <h2 className="mb-2 text-heading font-medium">{noteTitleFromPath(preview.path)}</h2>
           {preview.content ? (
             <MarkdownPreview value={preview.content} knownNotes={knownNotes} />
           ) : (
@@ -471,7 +547,11 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
   return (
     <div className="relative flex h-full min-h-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 md:px-4 md:py-4">
+        <div
+          ref={scrollerRef}
+          className="min-h-0 flex-1 overflow-y-auto px-3 py-3 md:px-4 md:py-4"
+          onScroll={onScrollerScroll}
+        >
           {showWelcome ? (
             <div className="mx-auto flex max-w-[46rem] flex-col items-center gap-3 px-2 pt-8 text-center md:pt-16">
               <h2 className="text-title font-semibold text-text-primary md:text-display">何を考えていますか？</h2>
@@ -498,11 +578,19 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
                       value={message.content}
                       knownNotes={knownNotes}
                       streaming={streaming}
-                      onWikiLink={openNote}
+                      onWikiLink={openWikiTarget}
                     />
                   </article>
                 );
               })}
+              {showWait ? (
+                <article className="border-l-2 border-accent pl-4">
+                  <p className="text-ui text-text-secondary">
+                    {waitLabel}
+                    <span className="stream-caret" />
+                  </p>
+                </article>
+              ) : null}
               {tools.length > 0 ? (
                 <section className="flex flex-col gap-1">
                   {tools.map((tool) => (

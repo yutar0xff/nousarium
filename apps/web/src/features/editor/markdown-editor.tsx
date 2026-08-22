@@ -4,51 +4,53 @@ import type { EditorProps } from "./types";
 import { CodeMirrorMarkdownEditor } from "./adapters/codemirror/codemirror-editor";
 import { MarkdownPreview } from "./preview";
 import { useState } from "react";
-import { cn } from "@nousarium/ui";
+import { cn, IconButton, SinglePaneIcon, SplitPaneIcon } from "@nousarium/ui";
+import { useEditorLayout } from "../../lib/use-editor-layout";
 
 export function MarkdownEditor({ knownNotes, ...props }: EditorProps & { knownNotes?: string[] }) {
   const [tab, setTab] = useState<"edit" | "preview">("edit");
+  const { layout, setEditorLayout } = useEditorLayout();
+  const split = layout === "split";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-stroke">
-      <div className="flex gap-1 border-b border-stroke p-1 text-ui lg:hidden" role="tablist" aria-label="表示">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "edit"}
-          className={cn(
-            "min-h-11 rounded-lg px-3",
-            tab === "edit" ? "bg-accent-soft text-accent" : "text-text-secondary hover:bg-surface",
-          )}
-          onClick={() => setTab("edit")}
+      <div className="flex shrink-0 items-center gap-1 border-b border-stroke p-1">
+        {split ? (
+          <p className="px-3 text-ui text-text-secondary">原文とプレビュー</p>
+        ) : (
+          <div className="flex gap-1 text-ui" role="tablist" aria-label="表示">
+            <EditorTab selected={tab === "edit"} onClick={() => setTab("edit")}>
+              編集
+            </EditorTab>
+            <EditorTab selected={tab === "preview"} onClick={() => setTab("preview")}>
+              プレビュー
+            </EditorTab>
+          </div>
+        )}
+        <IconButton
+          className="ml-auto"
+          label={split ? "1ペインにする" : "2ペインにする"}
+          aria-pressed={split}
+          onClick={() => setEditorLayout(split ? "tab" : "split")}
         >
-          編集
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "preview"}
-          className={cn(
-            "min-h-11 rounded-lg px-3",
-            tab === "preview" ? "bg-accent-soft text-accent" : "text-text-secondary hover:bg-surface",
-          )}
-          onClick={() => setTab("preview")}
-        >
-          プレビュー
-        </button>
+          {split ? <SinglePaneIcon /> : <SplitPaneIcon />}
+        </IconButton>
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-2">
+      <div className={cn("flex min-h-0 flex-1 overflow-hidden", split ? "flex-row" : "flex-col")}>
         <section
           aria-label="編集"
-          className={cn("h-full min-h-0 min-w-0 overflow-hidden", tab !== "edit" && "max-lg:hidden")}
+          className={cn("relative min-h-0 min-w-0 flex-1 overflow-hidden", !split && tab !== "edit" && "hidden")}
         >
-          <CodeMirrorMarkdownEditor {...props} />
+          <div className="absolute inset-0 min-h-0 overflow-hidden">
+            <CodeMirrorMarkdownEditor {...props} />
+          </div>
         </section>
         <section
           aria-label="プレビュー"
           className={cn(
-            "h-full min-h-0 min-w-0 overflow-auto lg:border-l lg:border-stroke",
-            tab !== "preview" && "max-lg:hidden",
+            "min-h-0 min-w-0 flex-1 overflow-auto",
+            split && "border-l border-stroke",
+            !split && tab !== "preview" && "hidden",
           )}
         >
           <div className="p-4">
@@ -57,5 +59,30 @@ export function MarkdownEditor({ knownNotes, ...props }: EditorProps & { knownNo
         </section>
       </div>
     </div>
+  );
+}
+
+function EditorTab({
+  selected,
+  onClick,
+  children,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  children: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={selected}
+      className={cn(
+        "min-h-11 rounded-lg px-3",
+        selected ? "bg-accent-soft text-accent" : "text-text-secondary hover:bg-surface",
+      )}
+      onClick={onClick}
+    >
+      {children}
+    </button>
   );
 }

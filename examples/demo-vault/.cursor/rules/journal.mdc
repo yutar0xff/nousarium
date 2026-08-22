@@ -7,4 +7,6 @@ alwaysApply: false
 # Journal
 
 `Journal/Conversations/` の対話本文はシステムが追記する。読んでもよいが、書き換えない。
+`conversation_id` と「参照・更新したノート」もシステムが書く。
 再利用する知識は `Notes/` へ抽出し、ログから Wikilink する。
+ノートの `derived-from:` 行は消さない。

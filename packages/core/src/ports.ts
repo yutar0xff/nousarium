@@ -44,6 +44,7 @@ export interface VersionControlPort {
   diff(from: string, to?: string): Promise<FileDiff[]>;
   revertRun(runId: string): Promise<string>;
   currentHead(): Promise<string | null>;
+  changedPaths(from: string): Promise<string[]>;
 }
 
 export interface ConversationStore {
@@ -61,4 +62,5 @@ export interface ConversationStore {
   updateRun(id: string, patch: Partial<Run>): Promise<Run>;
   listRuns(conversationId?: string): Promise<Run[]>;
   getRun(id: string): Promise<Run | null>;
+  getConversationByJournalPath(path: string): Promise<Conversation | null>;
 }

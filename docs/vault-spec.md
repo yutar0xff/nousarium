@@ -107,10 +107,10 @@ tags: [思考/内省, 技術/TypeScript]
 
 - supports: [[知識は接続によって再利用可能になる]]
 - contradicts: [[知識量を増やせば理解は深まる]]
-- derived-from: [[関連する対話ログ]]
+- derived-from: [[Journal/Conversations/2026/08/20260823T003235-アファンタジア|アファンタジアの対話]]
 ```
 
-矛盾する主張は片方を消さず、両方を残して接続します。
+`derived-from` はシステムが書きます。パス形式なので Obsidian でも解決できます。矛盾する主張は片方を消さず、両方を残して接続します。
 
 ## 対話ログ
 
@@ -123,6 +123,8 @@ tags: [思考/内省, 技術/TypeScript]
 - `type: [conversation]`
 - `status: raw`
 - `retention: permanent`
+- Frontmatter の `conversation_id` はシステムが書く
+- 本文の「参照・更新したノート」はシステムが書く。`updated` は Run で編集したノート、`referenced` は応答中の `[[ノート名]]`
 - 本文の対話セクションは追記専用
 - 再利用知識は `Notes/` へ抽出し、ログからリンクする
 

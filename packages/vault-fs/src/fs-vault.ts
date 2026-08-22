@@ -72,19 +72,23 @@ export function createFsVault(root: string): VaultPort {
     async search(query: SearchQuery) {
       const hits: SearchHit[] = [];
       const limit = query.limit ?? 40;
-      await walkMarkdown(root, async (relative, full) => {
-        if (hits.length >= limit) return;
-        const content = await readFile(full, "utf8");
-        if (isProtectedVaultPath(relative) || isAiExcludedMarkdown(content)) return;
-        const lines = content.split(/\r?\n/);
-        for (let lineNo = 0; lineNo < lines.length; lineNo += 1) {
-          const line = lines[lineNo] ?? "";
-          if (line.includes(query.q)) {
-            hits.push({ path: relative, line: lineNo + 1, preview: line.trim().slice(0, 240) });
-            if (hits.length >= limit) break;
+      await walkMarkdown(
+        root,
+        async (relative, full) => {
+          if (hits.length >= limit) return;
+          const content = await readFile(full, "utf8");
+          if (isProtectedVaultPath(relative) || isAiExcludedMarkdown(content)) return;
+          const lines = content.split(/\r?\n/);
+          for (let lineNo = 0; lineNo < lines.length; lineNo += 1) {
+            const line = lines[lineNo] ?? "";
+            if (line.includes(query.q)) {
+              hits.push({ path: relative, line: lineNo + 1, preview: line.trim().slice(0, 240) });
+              if (hits.length >= limit) break;
+            }
           }
-        }
-      });
+        },
+        query.prefix ?? "",
+      );
       return hits;
     },
 

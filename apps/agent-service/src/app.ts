@@ -17,10 +17,12 @@ import {
   snapshotPolicy,
 } from "@nousarium/core";
 import type { AgentPort, ConversationStore, VaultPort, VersionControlPort } from "@nousarium/core";
+import { isNotePath } from "@nousarium/markdown";
 import { VaultConflictError, withAiAccess } from "@nousarium/vault-fs";
 import { authMiddleware, signToken } from "./auth.js";
 import type { AppConfig } from "./config.js";
-import { appendJournal } from "./journal.js";
+import { appendJournal, writeRunLinks } from "./journal.js";
+import { findConversationForJournal, loadNoteRelations } from "./note-relations.js";
 import { Mutex } from "./mutex.js";
 
 export function createApp(input: {
@@ -73,6 +75,13 @@ export function createApp(input: {
       accessPolicy: body.accessPolicy ?? DEFAULT_ACCESS_POLICY,
     });
     return c.json(conversation);
+  });
+
+  app.get("/conversations/by-journal", async (c) => {
+    const filePath = c.req.query("path");
+    if (!filePath) return c.json({ error: "path required" }, 400);
+    const conversation = await findConversationForJournal(vault, store, filePath);
+    return c.json({ conversation });
   });
 
   app.get("/conversations/:id", async (c) => {
@@ -138,6 +147,10 @@ export function createApp(input: {
           pendingAccessPolicy: null,
           pendingModel: null,
         });
+        const runId = crypto.randomUUID();
+        await stream.writeSSE({
+          data: JSON.stringify({ type: "run.status", runId, phase: "sending" }),
+        });
         const userMessage = await store.addMessage({
           conversationId,
           role: "user",
@@ -147,17 +160,22 @@ export function createApp(input: {
         });
         const userTurns = (await store.listMessages(conversationId)).filter((message) => message.role === "user").length;
         if (userTurns === 1 && needsGeneratedTitle(conversation.title)) {
+          await stream.writeSSE({
+            data: JSON.stringify({ type: "run.status", runId, phase: "titling" }),
+          });
           const title = await agent.generateConversationTitle(body.content, policy.model);
           conversation = await store.updateConversation(conversation.id, { title });
           await stream.writeSSE({
             data: JSON.stringify({ type: "conversation.titled", conversationId: conversation.id, title }),
           });
         }
-        const runId = crypto.randomUUID();
         const history = await store.listMessages(conversationId);
         running.add(conversationId);
         const writes = policy.accessPolicy === "vault";
         try {
+          await stream.writeSSE({
+            data: JSON.stringify({ type: "run.status", runId, phase: "checkpoint" }),
+          });
           const gitBefore = await vaultLock.run(async () => git.checkpoint(`nousarium-pre:${runId}`));
           await store.createRun({
             id: runId,
@@ -167,6 +185,9 @@ export function createApp(input: {
             accessPolicy: policy.accessPolicy,
             gitBefore,
             startedAt: new Date().toISOString(),
+          });
+          await stream.writeSSE({
+            data: JSON.stringify({ type: "run.status", runId, phase: "starting" }),
           });
 
           let assistant = "";
@@ -220,11 +241,18 @@ export function createApp(input: {
             });
           }
           const all = await store.listMessages(conversationId);
-          const gitAfter = await vaultLock.run(async () => {
-            const journalPath = await appendJournal(vault, conversation, all);
-            await store.updateConversation(conversation.id, { journalPath });
-            return git.commitRun(runId, conversation.title);
-          });
+          const gitAfter = await vaultLock.run(() =>
+            writeRunLinks({
+              vault,
+              git,
+              store,
+              conversation,
+              messages: all,
+              assistant,
+              gitBefore,
+              runId,
+            }),
+          );
           const diffs = gitBefore && gitAfter ? await git.diff(gitBefore, gitAfter) : [];
           await store.updateRun(runId, {
             status: agentStatus === "cancelled" ? "cancelled" : "finished",
@@ -286,8 +314,22 @@ export function createApp(input: {
   });
 
   app.get("/vault/search", async (c) => {
-    const parsed = searchQuerySchema.parse({ q: c.req.query("q") ?? "", limit: c.req.query("limit") ? Number(c.req.query("limit")) : undefined });
+    const parsed = searchQuerySchema.parse({
+      q: c.req.query("q") ?? "",
+      limit: c.req.query("limit") ? Number(c.req.query("limit")) : undefined,
+      prefix: c.req.query("prefix") || undefined,
+    });
     return c.json(await vault.search(parsed));
+  });
+
+  app.get("/notes/relations", async (c) => {
+    const filePath = c.req.query("path");
+    if (!filePath || !isNotePath(filePath)) return c.json({ error: "path required" }, 400);
+    try {
+      return c.json(await loadNoteRelations(vault, store, filePath));
+    } catch {
+      return c.json({ error: "not found" }, 404);
+    }
   });
 
   app.get("/runs", async (c) => c.json(await store.listRuns(c.req.query("conversationId") ?? undefined)));

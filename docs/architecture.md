@@ -35,12 +35,12 @@ nousarium/
 依存の向き:
 
 ```text
-apps/web           → contracts, ui
-apps/agent-service → core, contracts, agent-cursor, vault-fs
+apps/web           → contracts, core, markdown, ui
+apps/agent-service → core, contracts, agent-cursor, vault-fs, markdown
 packages/core      → contracts
 packages/agent-cursor → core, contracts, @cursor/sdk
-packages/vault-fs  → core, contracts
-packages/markdown  → contracts
+packages/vault-fs  → core, contracts, markdown
+packages/markdown  → marked, yaml
 packages/ui        → React, Tailwind, Radix Primitives
 ```
 
@@ -66,6 +66,7 @@ interface VersionControlPort {
   commitRun(runId: string, message: string): Promise<GitRef>;
   diff(from: GitRef, to?: GitRef): Promise<FileDiff[]>;
   revertRun(runId: string): Promise<GitRef>;
+  changedPaths(from: GitRef): Promise<string[]>;
 }
 ```
 
@@ -79,9 +80,16 @@ Cursor 固有の Agent ID やツール名は `packages/agent-cursor` の内側�
 4. `vault` 権限なら Vault ロックのうえで Agent を動かす
 5. `AgentPort.send` が Cursor Agent を resume し、許可ツールを指定して送信する
 6. イベントを SSE で中継する
-7. 対話本文を Journal Markdown に追記し、Run 単位で commit する
+7. 対話本文を Journal Markdown に追記する。Frontmatter に `conversation_id`、本文に参照・更新したノートを書く。編集したノートの `## 関係` に `derived-from` を足す
+8. リンクを含めて Run 単位で commit する
 
 同一会話への送信は直列化します。異なる会話は並列できますが、Vault 書き込みは全体で 1 件です。
+
+ノートと対話の相互リンクは Vault の Markdown が正本です。runtime SQLite は `journal_path` から会話を引く索引としてだけ使います。
+
+- `GET /notes/relations?path=Notes/xxx.md` — ノートが更新した対話と、参照された対話
+- `GET /conversations/by-journal?path=Journal/Conversations/...` — 対話ログから会話を引く
+- `SearchQuery.prefix` — 検索の走査範囲（参照の逆引きは `Journal/Conversations` に絞る）
 
 ## リアルタイム
 
@@ -90,6 +98,7 @@ Cursor 固有の Agent ID やツール名は `packages/agent-cursor` の内側�
 イベント種別:
 
 - `run.started`
+- `run.status`（`sending` `titling` `checkpoint` `starting` `thinking`）
 - `agent.bound`
 - `assistant.delta`
 - `tool.started` / `tool.completed`

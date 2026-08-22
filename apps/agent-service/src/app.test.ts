@@ -109,6 +109,9 @@ describe("agent-service", () => {
       expect(payload.messages.filter((message) => message.role === "assistant")).toHaveLength(1);
       expect(payload.conversation.journalPath).toBeTruthy();
       expect(existsSync(path.join(dir, "vault", payload.conversation.journalPath!))).toBe(true);
+      const firstJournal = await readFile(path.join(dir, "vault", payload.conversation.journalPath!), "utf8");
+      expect(firstJournal).toContain(`conversation_id: ${conversation.id}`);
+      expect(firstJournal).toContain("## 参照・更新したノート");
 
       const runs = await app.request("/runs", { headers: auth });
       expect(runs.status).toBe(200);
@@ -125,6 +128,60 @@ describe("agent-service", () => {
       expect(journal).toMatch(/ai_access:\s*excluded/);
       const ignore = await readFile(path.join(dir, "vault", ".cursorignore"), "utf8");
       expect(ignore).toContain(payload.conversation.journalPath);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("returns note relations from journal wikilinks", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "nousarium-rel-"));
+    try {
+      const app = await createTestApp(dir);
+      const login = await app.request("/login", { method: "POST" });
+      const { token } = (await login.json()) as { token: string };
+      const auth = { authorization: `Bearer ${token}` };
+
+      await app.request("/vault/file", {
+        method: "PUT",
+        headers: { ...auth, "content-type": "application/json" },
+        body: JSON.stringify({
+          path: "Notes/可視.md",
+          content: "# 可視\n",
+          expectedHash: null,
+        }),
+      });
+
+      const created = await app.request("/conversations", {
+        method: "POST",
+        headers: { ...auth, "content-type": "application/json" },
+        body: JSON.stringify({ model: "auto", accessPolicy: "chat" }),
+      });
+      const conversation = (await created.json()) as { id: string };
+      const streamed = await app.request(`/conversations/${conversation.id}/messages`, {
+        method: "POST",
+        headers: { ...auth, "content-type": "application/json" },
+        body: JSON.stringify({ content: "[[可視]] について" }),
+      });
+      expect(streamed.status).toBe(200);
+      await streamed.text();
+
+      const relationsRes = await app.request("/notes/relations?path=Notes/%E5%8F%AF%E8%A6%96.md", { headers: auth });
+      expect(relationsRes.status).toBe(200);
+      const relations = (await relationsRes.json()) as {
+        edited: Array<{ conversationId: string | null }>;
+        referenced: Array<{ conversationId: string | null; title: string }>;
+      };
+      expect(relations.referenced.some((item) => item.conversationId === conversation.id)).toBe(true);
+
+      const loaded = await app.request(`/conversations/${conversation.id}`, { headers: auth });
+      const payload = (await loaded.json()) as { conversation: { journalPath: string } };
+      const byJournal = await app.request(
+        `/conversations/by-journal?path=${encodeURIComponent(payload.conversation.journalPath)}`,
+        { headers: auth },
+      );
+      expect(byJournal.status).toBe(200);
+      const found = (await byJournal.json()) as { conversation: { id: string } | null };
+      expect(found.conversation?.id).toBe(conversation.id);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

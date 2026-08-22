@@ -51,10 +51,13 @@ describe("vault-fs", () => {
       expect(top.map((entry) => entry.name)).toContain("Notes");
       const template = await readFile(path.join(dir, "System/Templates/conversation.md"), "utf8");
       expect(template).toContain("type: [conversation]");
+      expect(template).toContain("参照・更新したノート");
       expect(await readFile(path.join(dir, "AGENTS.md"), "utf8")).toContain("Nousarium");
       expect(await readFile(path.join(dir, "AGENTS.md"), "utf8")).toContain("分類の歪みに気づいたら提案する");
       expect(await readFile(path.join(dir, ".cursor/rules/note-format.mdc"), "utf8")).toContain("globs: Notes/**");
+      expect(await readFile(path.join(dir, ".cursor/rules/note-format.mdc"), "utf8")).toContain("derived-from:");
       expect(await readFile(path.join(dir, ".cursor/rules/journal.mdc"), "utf8")).toContain("globs: Journal/**");
+      expect(await readFile(path.join(dir, ".cursor/rules/journal.mdc"), "utf8")).toContain("conversation_id");
       expect(await readFile(path.join(dir, ".cursor/rules/system.mdc"), "utf8")).toContain("globs: System/**");
       expect(existsSync(path.join(dir, ".cursor/rules/knowledge.mdc"))).toBe(false);
       expect(existsSync(path.join(dir, ".cursor/rules/inbox.mdc"))).toBe(false);
@@ -131,6 +134,32 @@ secret phrase
       expect(hits.map((hit) => hit.path)).toEqual([]);
       const visible = await vault.search({ q: "hello" });
       expect(visible.some((hit) => hit.path.endsWith("visible.md"))).toBe(true);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("lists staged changed paths and limits search by prefix", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "nousarium-"));
+    try {
+      await initializeVault(dir);
+      const vault = createFsVault(dir);
+      const git = createGitVersionControl(dir);
+      await git.ensureRepo();
+      await vault.save({ path: "Notes/可視.md", content: "[[可視]] in note", expectedHash: null });
+      const head = await git.checkpoint("seed");
+      await vault.save({
+        path: "Journal/Conversations/2026/08/log.md",
+        content: "- referenced: [[可視]]",
+        expectedHash: null,
+      });
+      await vault.save({ path: "Notes/可視.md", content: "[[可視]] updated", expectedHash: (await vault.read("Notes/可視.md")).hash });
+      const paths = await git.changedPaths(head);
+      expect(paths).toContain("Notes/可視.md");
+      expect(paths).toContain("Journal/Conversations/2026/08/log.md");
+      const journalHits = await vault.search({ q: "[[可視]]", prefix: "Journal/Conversations" });
+      expect(journalHits.every((hit) => hit.path.startsWith("Journal/Conversations/"))).toBe(true);
+      expect(journalHits.some((hit) => hit.path.endsWith("log.md"))).toBe(true);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

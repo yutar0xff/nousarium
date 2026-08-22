@@ -22,6 +22,9 @@ importers:
       '@nousarium/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@nousarium/markdown':
+        specifier: workspace:*
+        version: link:../../packages/markdown
       '@nousarium/vault-fs':
         specifier: workspace:*
         version: link:../../packages/vault-fs

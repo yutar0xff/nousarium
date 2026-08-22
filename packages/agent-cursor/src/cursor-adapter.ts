@@ -58,6 +58,7 @@ export function createCursorAgentPort(options: CursorAgentPortOptions): AgentPor
       yield { type: "agent.bound", runId: input.runId, agentId: agent.agentId };
 
       const run = await agent.send(buildPrompt(input), { mode: "agent" });
+      yield { type: "run.status", runId: input.runId, phase: "thinking" };
       active.set(input.runId, {
         cancel: run.supports("cancel") ? () => run.cancel() : undefined,
       });

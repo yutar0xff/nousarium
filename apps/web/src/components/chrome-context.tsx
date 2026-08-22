@@ -9,6 +9,7 @@ export type ChatChrome = {
   excluded: boolean;
   onExclude: () => void;
   pending: string | null;
+  status: string | null;
 };
 
 type ChromeContextValue = {

@@ -12,6 +12,7 @@
     "@nousarium/agent-cursor": "workspace:*",
     "@nousarium/contracts": "workspace:*",
     "@nousarium/core": "workspace:*",
+    "@nousarium/markdown": "workspace:*",
     "@nousarium/vault-fs": "workspace:*",
     "hono": "^4.9.6"
   },
