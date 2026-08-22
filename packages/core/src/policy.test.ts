@@ -5,8 +5,7 @@ import { describe, expect, it } from "vitest";
 describe("policy", () => {
   it("maps access policies to tool allowlists", () => {
     expect(toolsForPolicy("chat")).toEqual([]);
-    expect(toolsForPolicy("read")).toEqual(["read", "grep", "glob", "ls"]);
-    expect(toolsForPolicy("vault-work")).toBeUndefined();
+    expect(toolsForPolicy("vault")).toBeUndefined();
   });
 
   it("flags destructive shell", () => {
@@ -20,25 +19,22 @@ describe("policy", () => {
       id: "c1",
       title: "t",
       cursorAgentId: null,
-      intent: "explore" as const,
       model: "auto",
-      mode: "plan" as const,
       accessPolicy: "chat" as const,
-      pendingMode: null,
       pendingAccessPolicy: null,
       pendingModel: null,
       journalPath: null,
       createdAt: "",
       updatedAt: "",
     };
-    const pending = applyPendingPolicy(conversation, { accessPolicy: "vault-work" }, true);
+    const pending = applyPendingPolicy(conversation, { accessPolicy: "vault" }, true);
     expect(pending.accessPolicy).toBe("chat");
-    expect(pending.pendingAccessPolicy).toBe("vault-work");
-    expect(snapshotPolicy(pending)).toEqual({ mode: "plan", accessPolicy: "vault-work", model: "auto" });
+    expect(pending.pendingAccessPolicy).toBe("vault");
+    expect(snapshotPolicy(pending)).toEqual({ accessPolicy: "vault", model: "auto" });
 
-    const idle = applyPendingPolicy(conversation, { accessPolicy: "read", model: "composer-2.5" }, false);
+    const idle = applyPendingPolicy(conversation, { accessPolicy: "vault", model: "composer-2.5" }, false);
     expect(idle.accessPolicy).toBe("chat");
-    expect(idle.pendingAccessPolicy).toBe("read");
+    expect(idle.pendingAccessPolicy).toBe("vault");
     expect(idle.pendingModel).toBe("composer-2.5");
   });
 });

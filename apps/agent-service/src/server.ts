@@ -1,7 +1,6 @@
 import { createAgentPort } from "@nousarium/agent-cursor";
 import { createFsVault, createGitVersionControl, initializeVault } from "@nousarium/vault-fs";
 import { serve } from "@hono/node-server";
-import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
@@ -9,9 +8,7 @@ import { createSqliteStore } from "./store.js";
 
 const config = loadConfig();
 await mkdir(config.runtimePath, { recursive: true });
-if (!existsSync(config.vaultPath)) {
-  await initializeVault(config.vaultPath);
-}
+await initializeVault(config.vaultPath);
 const vault = createFsVault(config.vaultPath);
 const git = createGitVersionControl(config.vaultPath);
 await git.ensureRepo();

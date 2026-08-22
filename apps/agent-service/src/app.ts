@@ -3,15 +3,21 @@ import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 import {
   createConversationRequestSchema,
-  proposedNoteRequestSchema,
   saveDocumentRequestSchema,
   searchQuerySchema,
   sendMessageRequestSchema,
   updatePolicyRequestSchema,
 } from "@nousarium/contracts";
-import { applyPendingPolicy, buildNoteProposal, CONVERSATION_TITLE_PLACEHOLDER, DEFAULT_INTENT_SETTINGS, MODEL_OPTIONS, needsGeneratedTitle, snapshotPolicy } from "@nousarium/core";
+import {
+  applyPendingPolicy,
+  CONVERSATION_TITLE_PLACEHOLDER,
+  DEFAULT_ACCESS_POLICY,
+  MODEL_OPTIONS,
+  needsGeneratedTitle,
+  snapshotPolicy,
+} from "@nousarium/core";
 import type { AgentPort, ConversationStore, VaultPort, VersionControlPort } from "@nousarium/core";
-import { VaultConflictError } from "@nousarium/vault-fs";
+import { VaultConflictError, withAiAccess } from "@nousarium/vault-fs";
 import { authMiddleware, signToken } from "./auth.js";
 import type { AppConfig } from "./config.js";
 import { appendJournal } from "./journal.js";
@@ -61,13 +67,10 @@ export function createApp(input: {
 
   app.post("/conversations", async (c) => {
     const body = createConversationRequestSchema.parse(await c.req.json());
-    const defaults = DEFAULT_INTENT_SETTINGS[body.intent];
     const conversation = await store.createConversation({
       title: body.title?.trim() || CONVERSATION_TITLE_PLACEHOLDER,
-      intent: body.intent,
       model: body.model,
-      mode: body.mode ?? defaults.mode,
-      accessPolicy: body.accessPolicy ?? defaults.accessPolicy,
+      accessPolicy: body.accessPolicy ?? DEFAULT_ACCESS_POLICY,
     });
     return c.json(conversation);
   });
@@ -87,6 +90,25 @@ export function createApp(input: {
     return c.json(await store.updateConversation(conversation.id, next));
   });
 
+  app.post("/conversations/:id/exclude", async (c) => {
+    const conversation = await store.getConversation(c.req.param("id"));
+    if (!conversation) return c.json({ error: "not found" }, 404);
+    const messages = await store.listMessages(conversation.id);
+    const journalPath = await vaultLock.run(async () => {
+      const path = conversation.journalPath ?? (await appendJournal(vault, conversation, messages));
+      const current = await vault.read(path);
+      await vault.save({
+        path,
+        content: withAiAccess(current.content, "excluded"),
+        expectedHash: current.hash,
+      });
+      await git.commitRun(`exclude-${conversation.id}`, `exclude ${path}`);
+      return path;
+    });
+    const updated = await store.updateConversation(conversation.id, { journalPath });
+    return c.json(updated);
+  });
+
   app.post("/conversations/:id/cancel", async (c) => {
     const runId = c.req.query("runId");
     if (runId) await agent.cancel(runId);
@@ -103,7 +125,7 @@ export function createApp(input: {
           await stream.writeSSE({ data: JSON.stringify({ type: "run.finished", runId: "", status: "error", error: "not found" }) });
           return;
         }
-        if (body.mode || body.accessPolicy || body.model) {
+        if (body.accessPolicy || body.model) {
           conversation = await store.updateConversation(
             conversation.id,
             applyPendingPolicy(conversation, body, false),
@@ -111,10 +133,8 @@ export function createApp(input: {
         }
         const policy = snapshotPolicy(conversation);
         conversation = await store.updateConversation(conversation.id, {
-          mode: policy.mode,
           accessPolicy: policy.accessPolicy,
           model: policy.model,
-          pendingMode: null,
           pendingAccessPolicy: null,
           pendingModel: null,
         });
@@ -123,7 +143,6 @@ export function createApp(input: {
           role: "user",
           content: body.content,
           runId: null,
-          mode: policy.mode,
           accessPolicy: policy.accessPolicy,
         });
         const userTurns = (await store.listMessages(conversationId)).filter((message) => message.role === "user").length;
@@ -137,18 +156,14 @@ export function createApp(input: {
         const runId = crypto.randomUUID();
         const history = await store.listMessages(conversationId);
         running.add(conversationId);
-        const writes = policy.accessPolicy === "vault-work";
+        const writes = policy.accessPolicy === "vault";
         try {
-          const gitBefore = writes
-            ? await vaultLock.run(async () => git.checkpoint(`nousarium-pre:${runId}`))
-            : await git.currentHead();
+          const gitBefore = await vaultLock.run(async () => git.checkpoint(`nousarium-pre:${runId}`));
           await store.createRun({
             id: runId,
             conversationId,
             status: "running",
-            intent: conversation.intent,
             model: policy.model,
-            mode: policy.mode,
             accessPolicy: policy.accessPolicy,
             gitBefore,
             startedAt: new Date().toISOString(),
@@ -163,9 +178,7 @@ export function createApp(input: {
               runId,
               message: userMessage.content,
               history,
-              intent: conversation.intent,
               model: policy.model,
-              mode: policy.mode,
               accessPolicy: policy.accessPolicy,
               vaultPath: config.vaultPath,
             })) {
@@ -203,7 +216,6 @@ export function createApp(input: {
               role: "assistant",
               content: assistant,
               runId,
-              mode: policy.mode,
               accessPolicy: policy.accessPolicy,
             });
           }
@@ -219,16 +231,6 @@ export function createApp(input: {
             gitAfter,
             finishedAt: new Date().toISOString(),
           });
-          if (agentStatus === "finished") {
-            const proposal = buildNoteProposal({
-              title: conversation.title,
-              directory: "00_Inbox",
-              messages: all,
-            });
-            await stream.writeSSE({
-              data: JSON.stringify({ type: "note.proposed", runId, proposal }),
-            });
-          }
           await stream.writeSSE({
             data: JSON.stringify({
               type: "run.finished",
@@ -253,14 +255,6 @@ export function createApp(input: {
         }
       });
     });
-  });
-
-  app.post("/conversations/:id/notes", async (c) => {
-    const conversation = await store.getConversation(c.req.param("id"));
-    if (!conversation) return c.json({ error: "not found" }, 404);
-    const body = proposedNoteRequestSchema.parse(await c.req.json());
-    const messages = await store.listMessages(conversation.id);
-    return c.json(buildNoteProposal({ title: body.title, directory: body.directory, messages }));
   });
 
   app.get("/vault/tree", async (c) => {

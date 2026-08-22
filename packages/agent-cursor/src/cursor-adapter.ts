@@ -1,7 +1,7 @@
 import { Agent, type AgentOptions, Cursor, JsonlLocalAgentStore } from "@cursor/sdk";
 import type { AgentEvent } from "@nousarium/contracts";
 import type { AgentInput, AgentPort } from "@nousarium/core";
-import { isDangerousShell, promptForIntent, resolveModelId, toolsForPolicy } from "@nousarium/core";
+import { isDangerousShell, resolveModelId, toolsForPolicy } from "@nousarium/core";
 import { mkdirSync } from "node:fs";
 import { mapCursorEvent } from "./map-events.js";
 import { generateConversationTitleWithCursor } from "./title.js";
@@ -17,6 +17,7 @@ function localOptions(cwd: string, store: JsonlLocalAgentStore): NonNullable<Age
     cwd,
     store,
     sandboxOptions: { enabled: false },
+    settingSources: ["project"],
   };
 }
 
@@ -32,7 +33,6 @@ export function createCursorAgentPort(options: CursorAgentPortOptions): AgentPor
         type: "run.started",
         runId: input.runId,
         conversationId: input.conversation.id,
-        mode: input.mode,
         accessPolicy: input.accessPolicy,
       };
 
@@ -41,7 +41,7 @@ export function createCursorAgentPort(options: CursorAgentPortOptions): AgentPor
       const base: AgentOptions = {
         apiKey: options.apiKey,
         model: { id: modelId },
-        mode: input.mode,
+        mode: "agent",
         ...(tools ? { tools } : {}),
         local: localOptions(input.vaultPath, store),
       };
@@ -57,7 +57,7 @@ export function createCursorAgentPort(options: CursorAgentPortOptions): AgentPor
 
       yield { type: "agent.bound", runId: input.runId, agentId: agent.agentId };
 
-      const run = await agent.send(buildPrompt(input), { mode: input.mode });
+      const run = await agent.send(buildPrompt(input), { mode: "agent" });
       active.set(input.runId, {
         cancel: run.supports("cancel") ? () => run.cancel() : undefined,
       });
@@ -121,20 +121,8 @@ async function createOrResume(agentId: string | null, options: AgentOptions) {
 }
 
 function buildPrompt(input: AgentInput): string {
-  const exclusion = [
-    promptForIntent(input.intent),
-    "保護ディレクトリ `_protected/` には入らない。",
-    "`ai_access: excluded` のノートは読まない。",
-    "対話ログの生本文は追記以外で書き換えない。",
-    "git push、reset --hard、clean、ホスト外への通信はしない。",
-    input.accessPolicy === "chat" ? "Vault を読まない。" : "",
-    input.accessPolicy === "read" ? "読み取りと検索のみ。ファイルを変更しない。" : "",
-    input.accessPolicy === "vault-work"
-      ? "必要なら Markdown を作成・編集する。新規ノートは Inbox または Knowledge の適切な場所へ置く。"
-      : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  return `${exclusion}\n\nユーザー:\n${input.message}`;
+  if (input.accessPolicy === "chat") {
+    return `このターンは会話のみです。Vault を読まず、ファイルを変更しないでください。\n\nユーザー:\n${input.message}`;
+  }
+  return input.message;
 }

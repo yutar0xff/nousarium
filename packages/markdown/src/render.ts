@@ -1,3 +1,5 @@
+import { Marked, type TokenizerAndRendererExtension } from "marked";
+
 function escapeHtml(text: string): string {
   return text
     .replaceAll("&", "&amp;")
@@ -6,28 +8,68 @@ function escapeHtml(text: string): string {
     .replaceAll('"', "&quot;");
 }
 
+const wikiLink: TokenizerAndRendererExtension = {
+  name: "wikilink",
+  level: "inline",
+  start(src) {
+    const index = src.indexOf("[[");
+    return index === -1 ? undefined : index;
+  },
+  tokenizer(src) {
+    const match = /^\[\[([^\]|#]+)(?:#([^\]|]+))?(?:\|([^\]]+))?\]\]/.exec(src);
+    const target = match?.[1]?.trim();
+    if (!match || !target) return undefined;
+    return {
+      type: "wikilink",
+      raw: match[0],
+      target,
+      label: (match[3] ?? target).trim(),
+    };
+  },
+  renderer(token) {
+    const target = String(token.target ?? "");
+    const label = String(token.label ?? target);
+    return `<a class="wikilink" data-target="${escapeHtml(target)}">${escapeHtml(label)}</a>`;
+  },
+};
+
+const hashTag: TokenizerAndRendererExtension = {
+  name: "hashtag",
+  level: "inline",
+  start(src) {
+    const index = src.search(/#([\p{Script=Han}\p{L}])/u);
+    return index === -1 ? undefined : index;
+  },
+  tokenizer(src) {
+    const match = /^#([\p{Script=Han}\p{L}\d/_-]+)/u.exec(src);
+    const tag = match?.[1];
+    if (!match || !tag) return undefined;
+    if (src.startsWith("# ")) return undefined;
+    return {
+      type: "hashtag",
+      raw: match[0],
+      tag,
+    };
+  },
+  renderer(token) {
+    const tag = String(token.tag ?? "");
+    return `<span class="tag">#${escapeHtml(tag)}</span>`;
+  },
+};
+
+const parser = new Marked();
+parser.use({
+  gfm: true,
+  breaks: true,
+  extensions: [wikiLink, hashTag],
+  renderer: {
+    html() {
+      return "";
+    },
+  },
+});
+
 export function renderMarkdownToHtml(markdown: string): string {
   const withoutFence = markdown.replace(/^---[\s\S]*?---\n*/, "");
-  const withWiki = withoutFence.replace(
-    /\[\[([^\]|#]+)(?:#([^\]|]+))?(?:\|([^\]]+))?\]\]/g,
-    (_all, target: string, _heading: string | undefined, label: string | undefined) =>
-      `<a class="wikilink" data-target="${escapeHtml(target.trim())}">${escapeHtml((label ?? target).trim())}</a>`,
-  );
-  const withTags = withWiki.replace(
-    /(^|\s)#([\p{Script=Han}\p{L}\d/_-]+)/gu,
-    (_all, prefix: string, tag: string) => `${prefix}<span class="tag">#${escapeHtml(tag)}</span>`,
-  );
-  const blocks = withTags.split(/\n{2,}/).map((block) => {
-    const line = block.trim();
-    if (!line) return "";
-    if (line.startsWith("### ")) return `<h3>${line.slice(4)}</h3>`;
-    if (line.startsWith("## ")) return `<h2>${line.slice(3)}</h2>`;
-    if (line.startsWith("# ")) return `<h1>${line.slice(2)}</h1>`;
-    if (line.startsWith("- ")) {
-      const items = line.split("\n").map((item) => `<li>${item.replace(/^- /, "")}</li>`).join("");
-      return `<ul>${items}</ul>`;
-    }
-    return `<p>${line.replaceAll("\n", "<br />")}</p>`;
-  });
-  return blocks.join("\n");
+  return parser.parse(withoutFence, { async: false }) as string;
 }

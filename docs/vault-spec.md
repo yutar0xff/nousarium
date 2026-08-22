@@ -13,42 +13,47 @@
 | 本文 | 日本語 |
 | タグ | 日本語 |
 
+## 軸の責務
+
+上から順に当てて、最初に当たったところで止める。
+
+| 問い | 軸 |
+| --- | --- |
+| 誰が書くか・AI に見せるかが変わるか | ディレクトリ |
+| 特定の 1 ノートを指しているか | Wikilink |
+| 語彙が閉じていて、機械が絞り込むか。ノート自身の状態か | プロパティ |
+| 内容そのもので、多値で、増えていくか | タグ |
+
+ディレクトリは取り扱いの分離です。知識ノートは扱いが同じなので分けません。分野横断の構造はタグではなく Wikilink と概念ノートで表します。
+
 ## ディレクトリ
 
 ```text
 vault/
-├─ 00_Inbox/
-├─ 10_Journal/
-│  ├─ Daily/
+├─ AGENTS.md
+├─ .cursor/
+│  └─ rules/
+├─ Notes/
+├─ Journal/
 │  └─ Conversations/
-├─ 20_Knowledge/
-│  ├─ Concepts/
-│  ├─ Questions/
-│  ├─ Methods/
-│  └─ Decisions/
-├─ 30_Projects/
-│  ├─ Active/
-│  ├─ Incubating/
-│  └─ Archived/
-├─ 40_Sources/
-│  ├─ Books/
-│  ├─ Articles/
-│  ├─ Web/
-│  └─ People/
-├─ 50_Outputs/
-│  ├─ Drafts/
-│  └─ Published/
-├─ 80_Maps/
-├─ 90_System/
+├─ System/
 │  ├─ Templates/
-│  ├─ Schemas/
-│  ├─ Prompts/
-│  └─ Reports/
+│  └─ Schemas/
 ├─ _assets/
+├─ _protected/
 └─ Trash/
 ```
 
-ディレクトリは運用上の置き場所です。知識分野はタグ、意味関係は Wikilink で表します。階層は 3 段以内です。
+| パス | 取り扱い |
+| --- | --- |
+| `Notes/` | 知識ノート。フラット。AI が作り、育てる |
+| `Journal/Conversations/` | 対話ログ。システムが追記。AI は書き換えない |
+| `System/` | 規約・テンプレート・語彙。参照する。語彙の追加は人間の承認が要る |
+| `_assets/` | 添付 |
+| `_protected/` | Agent から物理的に読ませない |
+| `Trash/` | 復元待ち |
+
+知識ノートのタイトルは Vault 全体で一意です。分類のためにファイルを移動しません。
 
 ## Properties
 
@@ -56,45 +61,42 @@ vault/
 
 ```yaml
 ---
-id: 01K36N7P7Z0F4B6A2M8J
-type: concept
+type: [method, concept]
 status: developing
-created: 2026-08-22
-updated: 2026-08-22
+confidence: high
+tags: [思考/内省]
 aliases: []
-tags: []
-projects: []
-sources: []
-confidence: medium
+created: 2026-08-23
+updated: 2026-08-23
 ai_access: normal
-review_after:
 ---
 ```
 
 | キー | 値 |
 | --- | --- |
-| `type` | `inbox` `daily` `conversation` `concept` `question` `method` `decision` `project` `source` `output` `map` |
+| `type` | 多値。`concept` `question` `method` `decision` `project` `source` `map` `conversation` |
 | `status` | `seed` `developing` `stable` `superseded` `archived` `raw` |
-| `ai_access` | `normal` `excluded` |
 | `confidence` | `low` `medium` `high` |
-| `retention` | `permanent`（対話ログ） |
+| `ai_access` | `normal` `excluded` |
+| `retention` | `permanent`（対話ログのみ） |
 
-`id` は生成後に変更しません。ファイル名を変えても同一ノートとして扱います。
+`review_after` は期限を切って見直すときだけ足します。分類が決まらないノートは `status: seed` のまま `Notes/` に置きます。
 
 ## タグ
 
-3 系統に限定します。
+主題の 1 軸だけです。語彙と運用の正本は `System/Schemas/tags.md` です。
 
-```text
-#分野/哲学/認識論
-#分野/技術/AI
-#観点/安全性
-#観点/使いやすさ
-#要確認/検証
-#要確認/矛盾
+```yaml
+tags: [思考/内省, 技術/TypeScript]
 ```
 
-プロジェクト名はタグにせず、`projects` からプロジェクトノートへ Wikilink します。
+- 第1段は閉じた語彙。第2段は自由。深さは 2 まで
+- 1 ノートあたり 1〜3 個
+- 第1段に当てはまらなければ新語を作らず、タグを付けずに `status: seed` にする
+- 第1段を増やせるのは人間だけ
+- プロジェクト名や固有名詞はタグにせず、`[[ノート名]]` で指す
+
+分野をまたぐ共通の構造はタグではなく Wikilink で表します。リンク先は未作成で構いません。表記ゆれは対象ノートの `aliases` で吸収します。
 
 ## 関係
 
@@ -112,26 +114,39 @@ review_after:
 
 ## 対話ログ
 
-パス例: `10_Journal/Conversations/2026/08/20260822T162045-vault_整理.md`
+パス例: `Journal/Conversations/2026/08/20260823T003235-vault_整理.md`
 
 ファイル名の先頭タイムスタンプは ISO 8601 基本形式（`YYYYMMDDTHHMMSS`）。Frontmatter の `created` / `updated` は `YYYY-MM-DD` のまま。
 
 ファイル名の区切り: `-` はタイムスタンプとタイトルなど役割の境界、`_` はタイトル内の単語区切り。
 
-- `type: conversation`
+- `type: [conversation]`
 - `status: raw`
 - `retention: permanent`
 - 本文の対話セクションは追記専用
-- 再利用知識は `20_Knowledge` へ抽出し、ログからリンクする
+- 再利用知識は `Notes/` へ抽出し、ログからリンクする
 
-## AI の整理範囲
+## AI の判断基準
 
-自動実行してよいもの: Properties 補完、タグ正規化、壊れたリンク検出、Inbox 分類候補、MOC 更新候補。
+規約の実行時の正本は Vault ルートの `AGENTS.md` と `.cursor/rules/` です。初期化コマンドが生成し、以降は Vault 側で編集します。タグ語彙は `System/Schemas/tags.md` に置き、rules へ複製しません。
 
-確認後: ノート移動、統合、`stable` 本文の変更、タイトル変更。
+| ファイル | 対象 |
+| --- | --- |
+| `AGENTS.md` | 毎ターンの判断、検索、応答の深さ、残す / 残さない、分類の歪みの提案 |
+| `.cursor/rules/note-format.mdc` | `Notes/**` の書式、type、タグ参照 |
+| `.cursor/rules/journal.mdc` | 対話ログは追記専用 |
+| `.cursor/rules/system.mdc` | System は参照のみ。語彙追加は承認が要る |
+| `System/Schemas/tags.md` | 第1段語彙、書き方、再構成の合図 |
+| `System/Schemas/properties.md` | type / status / confidence の語彙 |
 
-行わないもの: 対話ログの改変、矛盾する主張の一方削除、保護領域への侵入、`git push` や履歴破壊。
+自動実行してよいもの: 新規ノート、seed と developing ノートの更新、Properties 補完、タグ正規化、壊れたリンクの指摘。
+
+確認後: タグ語彙の変更、ノート統合、`stable` 本文の変更、タイトル変更。
+
+行わないもの: 対話ログの改変、矛盾する主張の一方削除、保護領域への侵入、`git push` や履歴破壊、第1段タグの無断追加。
+
+`.cursorignore` は `_protected/` と `ai_access: excluded` のノートから生成します。
 
 ## テンプレート
 
-`90_System/Templates/` に種別ごとの雛形を置きます。初期化コマンドが生成します。
+`System/Templates/` に種別ごとの雛形を置きます。初期化コマンドが生成します。複数の type を持つノートは、該当する雛形の節を合成します。

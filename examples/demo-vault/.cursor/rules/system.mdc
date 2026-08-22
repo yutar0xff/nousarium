@@ -1,0 +1,12 @@
+---
+description: System は参照のみ
+globs: System/**
+alwaysApply: false
+---
+
+# System
+
+規約・テンプレート・語彙。読んで従う。
+
+語彙（`Schemas/tags.md` の第1段、`Schemas/properties.md` の type）は人間の承認なしに増やさない。
+テンプレートをノートの雛形として読んでよいが、テンプレート自体は書き換えない。

@@ -19,19 +19,19 @@ export function ConflictPanel({
   onDismiss: () => void;
 }) {
   return (
-    <section className="rounded-sm border border-danger bg-surface-elevated p-3">
-      <h2 className="mb-2 text-sm font-semibold text-danger">編集が競合しています</h2>
-      <p className="mb-3 text-xs text-text-secondary">
+    <section className="rounded-xl border border-danger bg-danger-soft p-3">
+      <h2 className="mb-2 text-heading font-medium text-danger">編集が競合しています</h2>
+      <p className="mb-3 text-caption text-text-secondary">
         {path} は別の編集で更新されています。どちらを使うか選んでください。
       </p>
       <div className="grid gap-3 lg:grid-cols-2">
         <div>
-          <h3 className="mb-1 text-xs font-medium">編集中の内容</h3>
-          <pre className="max-h-48 overflow-auto rounded-sm bg-surface p-2 text-xs whitespace-pre-wrap">{localContent}</pre>
+          <h3 className="mb-1 text-caption font-medium">編集中の内容</h3>
+          <pre className="max-h-48 overflow-auto rounded-xl bg-surface-sunken p-2 font-mono text-mono whitespace-pre-wrap">{localContent}</pre>
         </div>
         <div>
-          <h3 className="mb-1 text-xs font-medium">ディスク上の内容</h3>
-          <pre className="max-h-48 overflow-auto rounded-sm bg-surface p-2 text-xs whitespace-pre-wrap">{disk.content}</pre>
+          <h3 className="mb-1 text-caption font-medium">ディスク上の内容</h3>
+          <pre className="max-h-48 overflow-auto rounded-xl bg-surface-sunken p-2 font-mono text-mono whitespace-pre-wrap">{disk.content}</pre>
         </div>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
@@ -41,7 +41,7 @@ export function ConflictPanel({
         <Button variant="secondary" onClick={onUseDisk}>
           ディスク版を読み込む
         </Button>
-        <Button variant="secondary" onClick={onDismiss}>
+        <Button variant="ghost" onClick={onDismiss}>
           閉じる
         </Button>
       </div>

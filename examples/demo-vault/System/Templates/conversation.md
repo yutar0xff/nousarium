@@ -1,16 +1,12 @@
 ---
-id: 8fa97ac6-8e62-42af-947d-a658f20285f3
+type: [conversation]
+status: raw
+confidence: medium
+tags: []
+aliases: []
 created: 2026-08-22
 updated: 2026-08-22
-aliases: []
-tags: []
-projects: []
-sources: []
-confidence: medium
 ai_access: normal
-review_after: 
-type: conversation
-status: raw
 retention: permanent
 ---
 

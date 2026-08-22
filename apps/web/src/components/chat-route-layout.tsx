@@ -1,7 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { ChatShell } from "./chat-shell";
+import { AppShell } from "./app-shell";
+import { ChromeProvider } from "./chrome-context";
 import { ChatWorkspace } from "./chat-workspace";
 import { useEffectivePathname } from "../lib/pathname";
 
@@ -16,9 +17,11 @@ export function ChatRouteLayout({ children }: { children: ReactNode }) {
   const conversationId = conversationIdFromPath(pathname);
 
   return (
-    <ChatShell>
-      <ChatWorkspace conversationId={conversationId} />
-      {children}
-    </ChatShell>
+    <ChromeProvider>
+      <AppShell>
+        <ChatWorkspace conversationId={conversationId} />
+        {children}
+      </AppShell>
+    </ChromeProvider>
   );
 }

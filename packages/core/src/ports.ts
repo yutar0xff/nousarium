@@ -2,8 +2,6 @@ import type {
   AccessPolicy,
   AgentEvent,
   Conversation,
-  ConversationIntent,
-  ConversationMode,
   FileDiff,
   Message,
   Run,
@@ -19,9 +17,7 @@ export interface AgentInput {
   runId: string;
   message: string;
   history: Message[];
-  intent: ConversationIntent;
   model: string;
-  mode: ConversationMode;
   accessPolicy: AccessPolicy;
   vaultPath: string;
 }
@@ -55,9 +51,7 @@ export interface ConversationStore {
   getConversation(id: string): Promise<Conversation | null>;
   createConversation(input: {
     title: string;
-    intent: ConversationIntent;
     model: string;
-    mode: ConversationMode;
     accessPolicy: AccessPolicy;
   }): Promise<Conversation>;
   updateConversation(id: string, patch: Partial<Conversation>): Promise<Conversation>;

@@ -34,8 +34,7 @@ Agent コンテナが触れる書き込み可能な領域:
 | AccessPolicy | ツール |
 | --- | --- |
 | `chat` | なし（テキストのみ） |
-| `read` | `read` `grep` `glob` `ls` |
-| `vault-work` | 上記に加え `write` `edit` `shell` |
+| `vault` | 既定のツール一式（読み書きと Shell） |
 
 `shell` は Vault を cwd にします。拒否するコマンド例:
 
@@ -49,7 +48,8 @@ Vault のファイルは自宅に残ります。Cursor Agent が読んだ内容�
 
 - `ai_access: excluded` は通常検索と文脈構築から外す
 - 見せたくない内容は保護ディレクトリへ移す
-- 機密ノートを `vault-work` で開かない
+- 見せたくない対話は `ai_access: excluded` にする（`.cursorignore` に載る）
+- 機密ノートを `vault` 権限の会話で開かない
 
 ## Git 復元
 

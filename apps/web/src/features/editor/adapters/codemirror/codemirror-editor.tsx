@@ -8,7 +8,7 @@ export function CodeMirrorMarkdownEditor({ value, onChange, readOnly }: EditorPr
   return (
     <CodeMirror
       value={value}
-      height="320px"
+      height="100%"
       editable={!readOnly}
       extensions={[markdown()]}
       onChange={onChange}

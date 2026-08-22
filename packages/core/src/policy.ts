@@ -1,20 +1,15 @@
 import type { AccessPolicy } from "@nousarium/contracts";
 
-export const CONVERSATION_MODE_LABELS = {
-  plan: "検討",
-  agent: "実行",
+export const ACCESS_POLICY_LABELS = {
+  chat: "会話のみ",
+  vault: "Vault を更新する",
 } as const;
 
-export const ACCESS_POLICY_LABELS = {
-  chat: "会話",
-  read: "参照",
-  "vault-work": "Vault作業",
-} as const;
+export const DEFAULT_ACCESS_POLICY: AccessPolicy = "vault";
 
 const POLICY_TOOLS: Record<AccessPolicy, string[] | undefined> = {
   chat: [],
-  read: ["read", "grep", "glob", "ls"],
-  "vault-work": undefined,
+  vault: undefined,
 };
 
 export function toolsForPolicy(policy: AccessPolicy): string[] | undefined {

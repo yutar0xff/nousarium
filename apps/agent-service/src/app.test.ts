@@ -3,7 +3,7 @@ import { createApp } from "./app.js";
 import { createSqliteStore } from "./store.js";
 import { createFsVault, createGitVersionControl, initializeVault } from "@nousarium/vault-fs";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -61,7 +61,7 @@ describe("agent-service", () => {
     }
   });
 
-  it("streams chat, persists messages, journal, note proposal, and git run", async () => {
+  it("streams chat, persists messages, journal, and git run", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "nousarium-flow-"));
     try {
       const app = await createTestApp(dir);
@@ -73,10 +73,8 @@ describe("agent-service", () => {
         method: "POST",
         headers: { ...auth, "content-type": "application/json" },
         body: JSON.stringify({
-          intent: "question",
           model: "auto",
-          mode: "plan",
-          accessPolicy: "read",
+          accessPolicy: "chat",
         }),
       });
       expect(created.status).toBe(200);
@@ -91,13 +89,15 @@ describe("agent-service", () => {
       const events = parseSseEvents(await streamed.text());
       expect(events.some((event) => (event as { type?: string }).type === "conversation.titled")).toBe(true);
       expect(events.some((event) => (event as { type?: string }).type === "assistant.delta")).toBe(true);
-      expect(events.some((event) => (event as { type?: string }).type === "note.proposed")).toBe(true);
+      expect(events.some((event) => (event as { type?: string }).type === "note.proposed")).toBe(false);
       const finished = events.find((event) => (event as { type?: string }).type === "run.finished") as {
         status?: string;
         result?: string;
+        diffs?: Array<{ path: string }>;
       };
       expect(finished?.status).toBe("finished");
       expect(finished?.result).toContain("知識は接続");
+      expect(finished?.diffs?.some((diff) => diff.path.includes("Journal/Conversations/"))).toBe(true);
 
       const loaded = await app.request(`/conversations/${conversation.id}`, { headers: auth });
       expect(loaded.status).toBe(200);
@@ -116,21 +116,15 @@ describe("agent-service", () => {
       expect(runList).toHaveLength(1);
       expect(runList[0]?.status).toBe("finished");
 
-      const proposalEvent = events.find((event) => (event as { type?: string }).type === "note.proposed") as {
-        proposal: { path: string; content: string; title: string };
-      };
-      const saved = await app.request("/vault/file", {
-        method: "PUT",
-        headers: { ...auth, "content-type": "application/json" },
-        body: JSON.stringify({
-          path: proposalEvent.proposal.path,
-          content: proposalEvent.proposal.content,
-          expectedHash: null,
-          overwrite: false,
-        }),
+      const excluded = await app.request(`/conversations/${conversation.id}/exclude`, {
+        method: "POST",
+        headers: auth,
       });
-      expect(saved.status).toBe(200);
-      expect(existsSync(path.join(dir, "vault", proposalEvent.proposal.path))).toBe(true);
+      expect(excluded.status).toBe(200);
+      const journal = await readFile(path.join(dir, "vault", payload.conversation.journalPath!), "utf8");
+      expect(journal).toMatch(/ai_access:\s*excluded/);
+      const ignore = await readFile(path.join(dir, "vault", ".cursorignore"), "utf8");
+      expect(ignore).toContain(payload.conversation.journalPath);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

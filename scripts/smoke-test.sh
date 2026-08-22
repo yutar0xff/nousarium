@@ -9,7 +9,7 @@ AUTH=(-H "Authorization: Bearer $TOKEN")
 
 echo "==> create conversation"
 CONV=$(curl -sf -X POST "$BASE/conversations" "${AUTH[@]}" -H 'Content-Type: application/json' \
-  -d '{"intent":"question","model":"auto","mode":"plan","accessPolicy":"read"}')
+  -d '{"model":"auto","accessPolicy":"chat"}')
 ID=$(echo "$CONV" | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')
 
 echo "==> send message (SSE)"

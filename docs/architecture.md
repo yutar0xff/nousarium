@@ -7,12 +7,14 @@
   → Tailscale Serve (HTTPS, tailnet 限定)
     → web (Next.js, 127.0.0.1:13000)
       → agent-service (Compose 内部)
-        → Cursor SDK Local Runtime
+        → Cursor SDK Local Runtime（cwd = Vault）
         → Vault (bind mount)
         → runtime SQLite (volume)
 ```
 
 `web` は Vault をマウントしません。ファイル操作と Agent 実行は `agent-service` に集約します。
+
+判断・検索・ノート編集は Cursor が行います。規約は Vault の `AGENTS.md` と `.cursor/rules` です。Nousarium は会話の器、対話ログの追記、Git の安全網を担当します。
 
 ## モノレポ
 
@@ -39,7 +41,7 @@ packages/core      → contracts
 packages/agent-cursor → core, contracts, @cursor/sdk
 packages/vault-fs  → core, contracts
 packages/markdown  → contracts
-packages/ui        → なし（React / Tailwind のみ）
+packages/ui        → React, Tailwind, Radix Primitives
 ```
 
 `core` と `contracts` は `@cursor/sdk`、`next`、`codemirror`、`node:fs` を import しません。
@@ -72,12 +74,12 @@ Cursor 固有の Agent ID やツール名は `packages/agent-cursor` の内側�
 ## 会話と Run
 
 1. クライアントがメッセージを POST する
-2. サービスが現在の `ConversationMode` と `AccessPolicy` をスナップショットする
-3. 書き込みが必要な場合は Vault ロックと Git チェックポイントを取る
-4. `AgentPort.send` が Cursor Agent を resume し、許可ツールを指定して送信する
-5. イベントを SSE で中継する
-6. 完了後、差分があれば Run 単位で commit する
-7. 対話本文を Journal Markdown に追記する
+2. サービスが現在の `AccessPolicy` をスナップショットする
+3. Git チェックポイントを取る（対話ログの追記があるため）
+4. `vault` 権限なら Vault ロックのうえで Agent を動かす
+5. `AgentPort.send` が Cursor Agent を resume し、許可ツールを指定して送信する
+6. イベントを SSE で中継する
+7. 対話本文を Journal Markdown に追記し、Run 単位で commit する
 
 同一会話への送信は直列化します。異なる会話は並列できますが、Vault 書き込みは全体で 1 件です。
 
@@ -91,18 +93,19 @@ Cursor 固有の Agent ID やツール名は `packages/agent-cursor` の内側�
 - `agent.bound`
 - `assistant.delta`
 - `tool.started` / `tool.completed`
-- `note.proposed`
-- `run.finished`（`status`: `finished` | `error` | `cancelled`）
+- `conversation.titled`
+- `run.finished`（`status`: `finished` | `error` | `cancelled`、任意で `diffs`）
 
 ## 永続化
 
 | データ | 置き場 |
 | --- | --- |
 | ノート本文 | Vault Markdown |
-| 対話全文 | `10_Journal/Conversations/*.md` |
+| 対話全文 | `Journal/Conversations/*.md` |
 | 会話メタ、Agent ID、Run、権限 | runtime SQLite |
 | Cursor ローカル状態 | runtime 配下 |
 | 変更履歴 | Vault の Git |
+| AI の判断基準 | Vault の `AGENTS.md` と `.cursor/rules` |
 
 ## 交換可能性
 
@@ -111,4 +114,4 @@ Cursor 固有の Agent ID やツール名は `packages/agent-cursor` の内側�
 - Markdown 編集 UI: `MarkdownEditor` の Adapter を差し替える
 - プレビュー: レンダラだけ差し替える
 
-交換しても残るものは、Vault の Markdown、Properties、Wikilink、Git 履歴です。
+交換しても残るものは、Vault の Markdown、Properties、Wikilink、Git 履歴、`AGENTS.md` です。

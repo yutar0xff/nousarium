@@ -1,0 +1,17 @@
+---
+description: 知識ノートの書式
+globs: Notes/**
+alwaysApply: false
+---
+
+# ノートの書式
+
+- ディレクトリ名・Property キー・機械判定用の値は英語
+- タイトル・本文・タグは日本語
+- ファイル名にスペースを使わない。`-` は役割の境界、`_` は単語区切り
+- Frontmatter の日付は `YYYY-MM-DD`
+- 知識ノートは `Notes/` 直下。タイトルは一意
+- `type` は多値。語彙は `System/Schemas/properties.md`
+- タグを付ける前に `System/Schemas/tags.md` を読む
+- 関係は本文の「関係」に `supports:` `contradicts:` `derived-from:` で書く
+- 新規作成時は `System/Templates/` の対応する雛形を読む。複数 type なら該当する節を合成する

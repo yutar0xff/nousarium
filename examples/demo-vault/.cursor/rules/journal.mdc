@@ -1,0 +1,10 @@
+---
+description: 対話ログは追記専用
+globs: Journal/**
+alwaysApply: false
+---
+
+# Journal
+
+`Journal/Conversations/` の対話本文はシステムが追記する。読んでもよいが、書き換えない。
+再利用する知識は `Notes/` へ抽出し、ログから Wikilink する。

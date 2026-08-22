@@ -3,8 +3,10 @@ import type { VaultPort } from "@nousarium/core";
 import { mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isAiExcludedMarkdown, isProtectedVaultPath } from "./access.js";
+import { regenerateCursorIgnore } from "./cursorignore.js";
 import { hashContent } from "./hash.js";
 import { resolveVaultPath, toVaultRelative } from "./paths.js";
+import { walkMarkdown } from "./walk.js";
 
 export class VaultConflictError extends Error {
   override name = "VaultConflictError";
@@ -63,6 +65,7 @@ export function createFsVault(root: string): VaultPort {
       const temp = `${full}.${process.pid}.tmp`;
       await writeFile(temp, input.content, "utf8");
       await rename(temp, full);
+      if (input.path.endsWith(".md")) await regenerateCursorIgnore(root);
       return { path: input.path, content: input.content, hash: hashContent(input.content) } satisfies VaultDocument;
     },
 
@@ -71,9 +74,8 @@ export function createFsVault(root: string): VaultPort {
       const limit = query.limit ?? 40;
       await walkMarkdown(root, async (relative, full) => {
         if (hits.length >= limit) return;
-        if (isProtectedVaultPath(relative)) return;
         const content = await readFile(full, "utf8");
-        if (isAiExcludedMarkdown(content)) return;
+        if (isProtectedVaultPath(relative) || isAiExcludedMarkdown(content)) return;
         const lines = content.split(/\r?\n/);
         for (let lineNo = 0; lineNo < lines.length; lineNo += 1) {
           const line = lines[lineNo] ?? "";
@@ -99,20 +101,4 @@ export function createFsVault(root: string): VaultPort {
       await mkdir(resolveVaultPath(root, relative), { recursive: true });
     },
   };
-}
-
-async function walkMarkdown(root: string, visit: (relative: string, full: string) => Promise<void>): Promise<void> {
-  async function walk(dir: string) {
-    const entries = await readdir(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.name === ".git" || entry.name === "node_modules") continue;
-      const full = path.join(dir, entry.name);
-      const relative = toVaultRelative(root, full);
-      if (entry.isDirectory()) {
-        if (isProtectedVaultPath(relative)) continue;
-        await walk(full);
-      } else if (entry.name.endsWith(".md")) await visit(relative, full);
-    }
-  }
-  await walk(root);
 }
