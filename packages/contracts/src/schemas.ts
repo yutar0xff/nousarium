@@ -1,0 +1,169 @@
+import { z } from "zod";
+
+export const conversationModeSchema = z.enum(["plan", "agent"]);
+export type ConversationMode = z.infer<typeof conversationModeSchema>;
+
+export const accessPolicySchema = z.enum(["chat", "read", "vault-work"]);
+export type AccessPolicy = z.infer<typeof accessPolicySchema>;
+
+export const runStatusSchema = z.enum(["queued", "running", "finished", "error", "cancelled"]);
+export type RunStatus = z.infer<typeof runStatusSchema>;
+
+export const conversationSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  cursorAgentId: z.string().nullable(),
+  mode: conversationModeSchema,
+  accessPolicy: accessPolicySchema,
+  pendingMode: conversationModeSchema.nullable(),
+  pendingAccessPolicy: accessPolicySchema.nullable(),
+  journalPath: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type Conversation = z.infer<typeof conversationSchema>;
+
+export const messageSchema = z.object({
+  id: z.string(),
+  conversationId: z.string(),
+  role: z.enum(["user", "assistant", "system"]),
+  content: z.string(),
+  runId: z.string().nullable(),
+  mode: conversationModeSchema.nullable(),
+  accessPolicy: accessPolicySchema.nullable(),
+  createdAt: z.string(),
+});
+export type Message = z.infer<typeof messageSchema>;
+
+export const runSchema = z.object({
+  id: z.string(),
+  conversationId: z.string(),
+  status: runStatusSchema,
+  mode: conversationModeSchema,
+  accessPolicy: accessPolicySchema,
+  gitBefore: z.string().nullable(),
+  gitAfter: z.string().nullable(),
+  error: z.string().nullable(),
+  startedAt: z.string(),
+  finishedAt: z.string().nullable(),
+});
+export type Run = z.infer<typeof runSchema>;
+
+export const vaultEntrySchema = z.object({
+  path: z.string(),
+  name: z.string(),
+  kind: z.enum(["file", "directory"]),
+  updatedAt: z.string().nullable(),
+});
+export type VaultEntry = z.infer<typeof vaultEntrySchema>;
+
+export const vaultDocumentSchema = z.object({
+  path: z.string(),
+  content: z.string(),
+  hash: z.string(),
+});
+export type VaultDocument = z.infer<typeof vaultDocumentSchema>;
+
+export const searchQuerySchema = z.object({
+  q: z.string().min(1),
+  limit: z.number().int().min(1).max(100).optional(),
+});
+export type SearchQuery = z.infer<typeof searchQuerySchema>;
+
+export const searchHitSchema = z.object({
+  path: z.string(),
+  line: z.number(),
+  preview: z.string(),
+});
+export type SearchHit = z.infer<typeof searchHitSchema>;
+
+export const saveDocumentRequestSchema = z.object({
+  path: z.string().min(1),
+  content: z.string(),
+  expectedHash: z.string().nullable(),
+});
+export type SaveDocumentRequest = z.infer<typeof saveDocumentRequestSchema>;
+
+export const fileDiffSchema = z.object({
+  path: z.string(),
+  status: z.enum(["added", "modified", "deleted"]),
+  patch: z.string(),
+});
+export type FileDiff = z.infer<typeof fileDiffSchema>;
+
+export const noteProposalSchema = z.object({
+  path: z.string(),
+  title: z.string(),
+  content: z.string(),
+});
+export type NoteProposal = z.infer<typeof noteProposalSchema>;
+
+export const createConversationRequestSchema = z.object({
+  title: z.string().optional(),
+  mode: conversationModeSchema.default("plan"),
+  accessPolicy: accessPolicySchema.default("read"),
+});
+
+export const sendMessageRequestSchema = z.object({
+  content: z.string().min(1),
+  mode: conversationModeSchema.optional(),
+  accessPolicy: accessPolicySchema.optional(),
+});
+export type SendMessageRequest = z.infer<typeof sendMessageRequestSchema>;
+
+export const updatePolicyRequestSchema = z.object({
+  mode: conversationModeSchema.optional(),
+  accessPolicy: accessPolicySchema.optional(),
+});
+export type UpdatePolicyRequest = z.infer<typeof updatePolicyRequestSchema>;
+
+export const proposedNoteRequestSchema = z.object({
+  title: z.string().min(1),
+  directory: z.string().default("00_Inbox"),
+});
+
+export const agentEventSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("run.started"),
+    runId: z.string(),
+    conversationId: z.string(),
+    mode: conversationModeSchema,
+    accessPolicy: accessPolicySchema,
+  }),
+  z.object({
+    type: z.literal("agent.bound"),
+    runId: z.string(),
+    agentId: z.string(),
+  }),
+  z.object({
+    type: z.literal("assistant.delta"),
+    runId: z.string(),
+    text: z.string(),
+  }),
+  z.object({
+    type: z.literal("tool.started"),
+    runId: z.string(),
+    tool: z.string(),
+    detail: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("tool.completed"),
+    runId: z.string(),
+    tool: z.string(),
+    detail: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("note.proposed"),
+    runId: z.string(),
+    proposal: noteProposalSchema,
+  }),
+  z.object({
+    type: z.literal("run.finished"),
+    runId: z.string(),
+    status: z.enum(["finished", "error", "cancelled"]),
+    result: z.string().optional(),
+    error: z.string().optional(),
+    diffs: z.array(fileDiffSchema).optional(),
+  }),
+]);
+export type AgentEvent = z.infer<typeof agentEventSchema>;

@@ -1,0 +1,15 @@
+@theme {
+  --color-surface: #f4f1ea;
+  --color-surface-elevated: #fffdf8;
+  --color-surface-inverse: #1c1b18;
+  --color-text-primary: #1c1b18;
+  --color-text-secondary: #5c584f;
+  --color-accent: #2f5d50;
+  --color-accent-soft: #d7e6e0;
+  --color-danger: #9b2c2c;
+  --color-warning: #8a5a12;
+  --color-success: #276749;
+  --color-stroke: #ddd6c7;
+  --font-sans: "Source Han Sans", "Noto Sans JP", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}

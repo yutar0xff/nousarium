@@ -1,0 +1,41 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+    ports:
+      - "127.0.0.1:${NOUSARIUM_WEB_PORT:-13000}:3000"
+    environment:
+      AGENT_SERVICE_URL: http://agent-service:8787
+    depends_on:
+      - agent-service
+    restart: unless-stopped
+
+  agent-service:
+    build:
+      context: .
+      dockerfile: docker/agent.Dockerfile
+    expose:
+      - "8787"
+    environment:
+      PORT: "8787"
+      HOME: /tmp
+      NOUSARIUM_VAULT_PATH: /vault
+      NOUSARIUM_RUNTIME_PATH: /runtime
+      NOUSARIUM_APP_SECRET: ${NOUSARIUM_APP_SECRET}
+      CURSOR_API_KEY: ${CURSOR_API_KEY}
+      CURSOR_MODEL: ${CURSOR_MODEL:-composer-2.5}
+      CURSOR_SANDBOX_ENABLED: ${CURSOR_SANDBOX_ENABLED:-false}
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://127.0.0.1:13000}
+    volumes:
+      - ${NOUSARIUM_VAULT_PATH:-./data/vault}:/vault
+      - ${NOUSARIUM_RUNTIME_PATH:-./data/runtime}:/runtime
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped

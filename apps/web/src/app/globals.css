@@ -1,0 +1,41 @@
+@import "tailwindcss";
+@import "@nousarium/ui/styles.css";
+@source "../../../../packages/ui/src";
+
+html,
+body {
+  min-height: 100%;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+textarea,
+input,
+select {
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-stroke);
+  border-radius: 0.25rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.75rem;
+  color: inherit;
+}
+
+pre {
+  white-space: pre-wrap;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.wikilink {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+.tag {
+  display: inline-block;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  border-radius: 999px;
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
+}

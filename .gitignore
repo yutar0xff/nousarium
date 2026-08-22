@@ -1,0 +1,16 @@
+node_modules
+.pnpm-store
+dist
+.next
+out
+coverage
+*.log
+.env
+.env.local
+data/
+runtime/
+.turbo
+.DS_Store
+*.tsbuildinfo
+apps/web/.next
+apps/agent-service/data

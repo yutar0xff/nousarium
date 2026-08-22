@@ -1,0 +1,23 @@
+{
+  "name": "@nousarium/agent-cursor",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "spike": "tsx src/spike.ts"
+  },
+  "dependencies": {
+    "@cursor/sdk": "^1.0.28",
+    "@nousarium/contracts": "workspace:*",
+    "@nousarium/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

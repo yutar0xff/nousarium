@@ -1,0 +1,17 @@
+{
+  "name": "nousarium",
+  "private": true,
+  "packageManager": "pnpm@10.30.3",
+  "scripts": {
+    "dev": "pnpm --filter @nousarium/agent-service --filter @nousarium/web --parallel dev",
+    "build": "pnpm -r --if-present build",
+    "test": "pnpm -r --if-present test",
+    "lint": "pnpm -r --if-present lint && node scripts/check-boundaries.mjs",
+    "check-boundaries": "node scripts/check-boundaries.mjs",
+    "vault:init": "pnpm --filter @nousarium/vault-fs vault:init",
+    "spike:cursor": "pnpm --filter @nousarium/agent-cursor spike"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}
