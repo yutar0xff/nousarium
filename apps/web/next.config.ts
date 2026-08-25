@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
     "@nousarium/contracts",
     "@nousarium/markdown",
     "@nousarium/core",
+    "microsoft-cognitiveservices-speech-sdk",
   ],
   async headers() {
     return [

@@ -27,7 +27,7 @@ Agent コンテナが触れる書き込み可能な領域:
 - 読み取り専用ルートファイルシステム
 - `cap_drop: ALL`
 - `no-new-privileges`
-- agent-service は Compose 内部のみ公開
+- agent-service は `127.0.0.1:8787` のみ公開（Tailscale Serve の対象は web）
 
 ## 権限とツール
 
@@ -67,6 +67,7 @@ Vault のファイルは自宅に残ります。Cursor Agent が読んだ内容�
 ## 秘密情報
 
 - `CURSOR_API_KEY` は Agent コンテナの環境変数のみ
+- `AZURE_SPEECH_KEY` は Agent コンテナの環境変数のみ（ブラウザには短命トークンだけ渡す）
 - `NOUSARIUM_APP_SECRET` は Bearer トークン署名用
 - `.env` は Git に含めない
 - Vault 内に API キーを書かない

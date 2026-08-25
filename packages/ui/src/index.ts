@@ -6,6 +6,7 @@ export { Field } from "./field";
 export { TextInput, Textarea, Select } from "./text-input";
 export { Switch } from "./switch";
 export { Sheet } from "./sheet";
+export { ConfirmDialog } from "./confirm-dialog";
 export { Menu, MenuItem, MenuLabel, MenuSeparator, MenuRadioGroup, MenuRadioItem } from "./menu";
 export { ToastProvider, useToast } from "./toast";
 export { EmptyState, Skeleton } from "./empty-state";
@@ -27,4 +28,9 @@ export {
   FolderIcon,
   SplitPaneIcon,
   SinglePaneIcon,
+  SettingsIcon,
+  MicIcon,
+  SpeechCancelIcon,
+  SpeechEditIcon,
+  SpeechSendIcon,
 } from "./icons";

@@ -42,7 +42,17 @@ function required(name: string, fallback?: string): string {
   return value;
 }
 
+function parseWebOrigins(value: string | undefined): string[] {
+  const raw = value ?? "http://127.0.0.1:3000,http://127.0.0.1:13000";
+  const origins = raw
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  return origins.length > 0 ? origins : ["http://127.0.0.1:3000"];
+}
+
 export function loadConfig() {
+  const webOrigins = parseWebOrigins(process.env.WEB_ORIGIN);
   return {
     port: Number(process.env.PORT ?? 8787),
     vaultPath: resolveConfiguredPath(required("NOUSARIUM_VAULT_PATH", "./data/vault")),
@@ -50,7 +60,10 @@ export function loadConfig() {
     appSecret: required("NOUSARIUM_APP_SECRET", "dev-secret"),
     cursorApiKey: process.env.CURSOR_API_KEY,
     cursorModel: process.env.CURSOR_MODEL ?? "auto",
-    webOrigin: process.env.WEB_ORIGIN ?? "http://127.0.0.1:3000",
+    webOrigins,
+    azureSpeechKey: process.env.AZURE_SPEECH_KEY?.trim() || undefined,
+    azureSpeechRegion: process.env.AZURE_SPEECH_REGION?.trim() || undefined,
+    azureSpeechLanguage: process.env.AZURE_SPEECH_LANGUAGE?.trim() || "ja-JP",
   };
 }
 

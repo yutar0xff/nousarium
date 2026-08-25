@@ -33,6 +33,10 @@ Adapter は `local.settingSources: ["project"]` を指定し、Vault 外のユ�
 
 AccessPolicy は `packages/core` の `toolsForPolicy` で Cursor のツール名へ変換します。
 
+モデル一覧は `Cursor.models.list` で取得し、`GET /models` から返します。取得できないときは `MODEL_OPTIONS` を使います。
+
+初回送信の会話タイトル生成は、本応答の Agent 実行と並行します。タイトルは対話ログのファイル名にも使います。Journal 追記の直前にタイトル確定を待ちます。
+
 ## 環境変数
 
 | 変数 | 用途 |

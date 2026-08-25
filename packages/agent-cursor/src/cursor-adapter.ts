@@ -1,7 +1,7 @@
 import { Agent, type AgentOptions, Cursor, JsonlLocalAgentStore } from "@cursor/sdk";
 import type { AgentEvent } from "@nousarium/contracts";
 import type { AgentInput, AgentPort } from "@nousarium/core";
-import { isDangerousShell, resolveModelId, toolsForPolicy } from "@nousarium/core";
+import { isDangerousShell, MODEL_OPTIONS, normalizeModelOptions, resolveModelId, toolsForPolicy } from "@nousarium/core";
 import { mkdirSync } from "node:fs";
 import { mapCursorEvent } from "./map-events.js";
 import { generateConversationTitleWithCursor } from "./title.js";
@@ -26,6 +26,8 @@ export function createCursorAgentPort(options: CursorAgentPortOptions): AgentPor
   const store = new JsonlLocalAgentStore(options.storePath);
   Cursor.configure({ local: { store } });
   const active = new Map<string, { cancel?: () => Promise<void> }>();
+  let modelsCache: { at: number; models: Array<{ id: string; label: string }> } | null = null;
+  const modelsCacheTtlMs = 10 * 60 * 1000;
 
   return {
     async *send(input: AgentInput): AsyncIterable<AgentEvent> {
@@ -112,6 +114,25 @@ export function createCursorAgentPort(options: CursorAgentPortOptions): AgentPor
         model: model ?? options.model,
         message,
       });
+    },
+
+    async listModels() {
+      if (modelsCache && Date.now() - modelsCache.at < modelsCacheTtlMs) return modelsCache.models;
+      try {
+        const listed = await Cursor.models.list({ apiKey: options.apiKey });
+        const models = normalizeModelOptions(
+          listed.map((model) => ({
+            id: model.id,
+            label: model.displayName?.trim() || model.id,
+          })),
+        );
+        modelsCache = { at: Date.now(), models };
+        return models;
+      } catch {
+        const models = normalizeModelOptions(MODEL_OPTIONS.map((option) => ({ id: option.id, label: option.label })));
+        modelsCache = { at: Date.now(), models };
+        return models;
+      }
     },
   };
 }

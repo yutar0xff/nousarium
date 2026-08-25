@@ -59,11 +59,17 @@ examples/demo-vault   合成データのみ
 
 必要環境: Node.js 22.13 以上、pnpm 10、Docker Compose、Git。
 
+`agent-service` は Docker で起動し、web だけを `pnpm` で開発します。
+
 ```bash
 pnpm install
 cp .env.example .env
 pnpm vault:init --path ./data/vault
+pnpm agent:up
 pnpm dev
 ```
+
+- web: `http://127.0.0.1:3000`
+- agent-service: `http://127.0.0.1:8787`（Compose）
 
 本番起動は [運用](docs/operations.md) を参照してください。

@@ -3,6 +3,18 @@ import { z } from "zod";
 export const modelIdSchema = z.string().min(1);
 export type ModelId = z.infer<typeof modelIdSchema>;
 
+export const modelOptionSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+});
+export type ModelOption = z.infer<typeof modelOptionSchema>;
+
+export const modelsResponseSchema = z.object({
+  default: z.string(),
+  models: z.array(modelOptionSchema),
+});
+export type ModelsResponse = z.infer<typeof modelsResponseSchema>;
+
 export const accessPolicySchema = z.enum(["chat", "vault"]);
 export type AccessPolicy = z.infer<typeof accessPolicySchema>;
 

@@ -4,8 +4,6 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 
 export type ChatChrome = {
   conversationId: string | null;
-  model: string;
-  onModelChange: (model: string) => void;
   excluded: boolean;
   onExclude: () => void;
   pending: string | null;

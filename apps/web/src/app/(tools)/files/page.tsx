@@ -2,10 +2,10 @@
 
 import type { NoteRelations, VaultDocument } from "@nousarium/contracts";
 import { parseFrontmatter } from "@nousarium/markdown";
-import { BackIcon, Button, EmptyState, IconButton, Pill, useToast } from "@nousarium/ui";
+import { BackIcon, Button, ConfirmDialog, EmptyState, IconButton, Pill, useToast } from "@nousarium/ui";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { MarkdownEditor } from "../../../features/editor/markdown-editor";
 import { api } from "../../../lib/api";
 import { filesHref, notesInSelection, titleFrom } from "../../../lib/tag-tree";
@@ -37,8 +37,9 @@ function FilesWorkspace() {
   const [doc, setDoc] = useState<VaultDocument | null>(null);
   const [error, setError] = useState("");
   const [conflict, setConflict] = useState<{ local: VaultDocument; disk: VaultDocument } | null>(null);
-  const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [relations, setRelations] = useState<NoteRelations | null>(null);
+  const [metaOpen, setMetaOpen] = useState<"properties" | "relations" | null>(null);
+  const [confirm, setConfirm] = useState<"save" | "reload" | null>(null);
 
   const visible = useMemo(() => notesInSelection(items, { tag, untagged }), [items, tag, untagged]);
 
@@ -57,8 +58,8 @@ function FilesWorkspace() {
       setDoc(null);
       setConflict(null);
       setError("");
-      setPropertiesOpen(false);
       setRelations(null);
+      setMetaOpen(null);
       return;
     }
     let cancelled = false;
@@ -72,8 +73,8 @@ function FilesWorkspace() {
         setDoc(file);
         setConflict(null);
         setError("");
-        setPropertiesOpen(false);
         setRelations(linked);
+        setMetaOpen(null);
         const { data, body } = parseFrontmatter(file.content);
         setTitle(titleFrom(file.path, body, data.aliases));
       } catch (err) {
@@ -111,6 +112,22 @@ function FilesWorkspace() {
         return;
       }
       setError(err instanceof Error ? err.message : "保存に失敗しました");
+    }
+  }
+
+  async function reloadDocument() {
+    if (!notePath) return;
+    setError("");
+    try {
+      const file = await api<VaultDocument>(`/vault/file?path=${encodeURIComponent(notePath)}`);
+      setDoc(file);
+      setConflict(null);
+      const { data, body } = parseFrontmatter(file.content);
+      setTitle(titleFrom(file.path, body, data.aliases));
+      toast("読み直しました");
+      notifyNotesChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "読み直せませんでした");
     }
   }
 
@@ -161,11 +178,44 @@ function FilesWorkspace() {
     <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden p-3 md:gap-3 md:p-4">
       {doc ? (
         <>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-1 sm:gap-2">
             <IconButton label="一覧に戻る" onClick={closeNote}>
               <BackIcon />
             </IconButton>
-            <h2 className="truncate text-heading font-medium">{doc.path}</h2>
+            <h2 className="min-w-0 flex-1 truncate text-heading font-medium">{doc.path}</h2>
+            <HeaderPopover
+              label="Properties"
+              open={metaOpen === "properties"}
+              onOpenChange={(open) => setMetaOpen(open ? "properties" : null)}
+            >
+              {propertyRows.length > 0 ? (
+                <table className="w-full text-caption">
+                  <tbody>
+                    {propertyRows.map(([key, value]) => (
+                      <tr key={key} className="border-t border-stroke first:border-t-0">
+                        <th className="py-1 pr-3 text-left font-medium text-text-secondary">{key}</th>
+                        <td className="py-1 text-text-primary">{formatValue(value)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="text-caption text-text-muted">Properties はありません。</p>
+              )}
+            </HeaderPopover>
+            <HeaderPopover
+              label="関連する対話"
+              open={metaOpen === "relations"}
+              onOpenChange={(open) => setMetaOpen(open ? "relations" : null)}
+            >
+              <RelatedConversations relations={relations} />
+            </HeaderPopover>
+            <Link
+              href={`/?note=${encodeURIComponent(notePath)}`}
+              className="inline-flex h-11 shrink-0 items-center rounded-lg px-3 text-ui font-medium text-accent hover:bg-accent-soft"
+            >
+              このノートについて話す
+            </Link>
           </div>
           {error ? <p className="text-ui text-danger">{error}</p> : null}
           {conflict ? (
@@ -181,36 +231,41 @@ function FilesWorkspace() {
               onDismiss={() => setConflict(null)}
             />
           ) : null}
-          <details
-            className="shrink-0 rounded-xl border border-stroke bg-surface-elevated"
-            open={propertiesOpen}
-            onToggle={(event) => setPropertiesOpen((event.target as HTMLDetailsElement).open)}
-          >
-            <summary className="cursor-pointer px-3 py-2 text-ui font-medium">Properties</summary>
-            <div className="overflow-x-auto px-3 pb-3">
-              <table className="w-full text-caption">
-                <tbody>
-                  {propertyRows.map(([key, value]) => (
-                    <tr key={key} className="border-t border-stroke">
-                      <th className="py-1 pr-3 text-left font-medium text-text-secondary">{key}</th>
-                      <td className="py-1 text-text-primary">{formatValue(value)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </details>
-          <RelatedConversations path={notePath} relations={relations} />
           <MarkdownEditor
             value={doc.content}
             knownNotes={knownNotes}
             onChange={(content) => {
               setDoc({ ...doc, content });
             }}
+            toolbar={
+              <>
+                <Button variant="ghost" className="px-3" onClick={() => setConfirm("reload")}>
+                  再読込
+                </Button>
+                <Button className="px-3" onClick={() => setConfirm("save")}>
+                  保存
+                </Button>
+              </>
+            }
           />
-          <Button className="shrink-0" onClick={() => void saveDocument(doc)}>
-            保存
-          </Button>
+          <ConfirmDialog
+            open={confirm !== null}
+            onOpenChange={(open) => {
+              if (!open) setConfirm(null);
+            }}
+            title={confirm === "reload" ? "ディスクから読み直しますか？" : "このノートを保存しますか？"}
+            description={
+              confirm === "reload"
+                ? "編集中の内容は捨てて、Vault の最新を開きます。"
+                : "Vault のファイルを更新します。"
+            }
+            confirmLabel={confirm === "reload" ? "読み直す" : "保存する"}
+            confirmVariant={confirm === "reload" ? "danger" : "primary"}
+            onConfirm={() => {
+              if (confirm === "reload") void reloadDocument();
+              else void saveDocument(doc);
+            }}
+          />
         </>
       ) : error ? (
         <p className="text-ui text-danger">{error}</p>
@@ -221,26 +276,70 @@ function FilesWorkspace() {
   );
 }
 
-function RelatedConversations({ path, relations }: { path: string | null; relations: NoteRelations | null }) {
-  if (!path) return null;
+function HeaderPopover({
+  label,
+  open,
+  onOpenChange,
+  children,
+}: {
+  label: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: ReactNode;
+}) {
+  const root = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointer(event: PointerEvent) {
+      if (root.current?.contains(event.target as Node)) return;
+      onOpenChange(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onOpenChange(false);
+    }
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, onOpenChange]);
+
   return (
-    <section className="max-h-[28%] shrink-0 space-y-3 overflow-y-auto rounded-xl border border-stroke bg-surface-elevated px-3 py-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-ui font-medium">関連する対話</h2>
-        <Link href={`/?note=${encodeURIComponent(path)}`} className="text-caption text-accent hover:underline">
-          このノートについて話す
-        </Link>
-      </div>
-      {relations && (relations.edited.length > 0 || relations.referenced.length > 0) ? (
-        <div className="space-y-3">
-          <RelationGroup label="更新した対話" items={relations.edited} />
-          <RelationGroup label="参照した対話" items={relations.referenced} />
+    <div ref={root} className="relative shrink-0">
+      <Button
+        variant="ghost"
+        className="px-3"
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        onClick={() => onOpenChange(!open)}
+      >
+        {label}
+      </Button>
+      {open ? (
+        <div
+          role="dialog"
+          aria-label={label}
+          className="absolute right-0 z-40 mt-1 max-h-[min(24rem,70dvh)] w-[min(22rem,calc(100vw-2rem))] overflow-auto rounded-xl border border-stroke bg-surface-elevated p-3 shadow-float"
+        >
+          {children}
         </div>
-      ) : (
-        <p className="text-caption text-text-muted">まだ関連する対話はありません。</p>
-      )}
-    </section>
+      ) : null}
+    </div>
   );
+}
+
+function RelatedConversations({ relations }: { relations: NoteRelations | null }) {
+  if (relations && (relations.edited.length > 0 || relations.referenced.length > 0)) {
+    return (
+      <div className="space-y-3">
+        <RelationGroup label="更新した対話" items={relations.edited} />
+        <RelationGroup label="参照した対話" items={relations.referenced} />
+      </div>
+    );
+  }
+  return <p className="text-caption text-text-muted">まだ関連する対話はありません。</p>;
 }
 
 function RelationGroup({

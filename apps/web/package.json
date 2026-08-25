@@ -18,6 +18,7 @@
     "@nousarium/markdown": "workspace:*",
     "@nousarium/ui": "workspace:*",
     "@uiw/react-codemirror": "^4.25.1",
+    "microsoft-cognitiveservices-speech-sdk": "^1.51.0",
     "next": "^16.3.2",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"

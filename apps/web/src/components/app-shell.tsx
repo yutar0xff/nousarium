@@ -7,17 +7,10 @@ import {
   ChevronLeftIcon,
   cn,
   IconButton,
-  Menu,
-  MenuItem,
-  MenuLabel,
-  MenuRadioGroup,
-  MenuRadioItem,
-  MenuSeparator,
-  MoreIcon,
   NotesIcon,
+  SettingsIcon,
   Sheet,
 } from "@nousarium/ui";
-import { MODEL_OPTIONS } from "@nousarium/core";
 import Link from "next/link";
 import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { useChrome } from "./chrome-context";
@@ -28,6 +21,11 @@ import { useNewConversationShortcut } from "../lib/use-new-conversation-shortcut
 import { sidebarActionLabel, useSidebar } from "../lib/use-sidebar";
 import { useEffectivePathname } from "../lib/pathname";
 import { applyThemePreference, readThemePreference, type ThemePreference } from "../lib/theme";
+import {
+  applySpeechProvider,
+  readSpeechProvider,
+  type SpeechProvider,
+} from "../lib/speech/provider";
 
 const NAV = [
   { href: "/", label: "対話", icon: ChatIcon, match: (path: string) => path === "/" || path.startsWith("/c/") },
@@ -77,57 +75,109 @@ function NavLinks({
   );
 }
 
-function OverflowMenu() {
+function SettingsButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex min-h-11 items-center justify-start gap-2 rounded-lg px-3 text-ui",
+        "text-text-secondary hover:bg-surface hover:text-text-primary",
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stroke-strong",
+      )}
+    >
+      <SettingsIcon className="size-6 text-text-muted" />
+      設定
+    </button>
+  );
+}
+
+function SettingsPanel() {
   const { chat } = useChrome();
   const [theme, setTheme] = useState<ThemePreference>("system");
+  const [speechProvider, setSpeechProvider] = useState<SpeechProvider>("azure");
 
   useEffect(() => {
     setTheme(readThemePreference());
+    setSpeechProvider(readSpeechProvider());
   }, []);
 
   return (
-    <Menu
-      trigger={
-        <IconButton label="メニュー">
-          <MoreIcon />
-        </IconButton>
-      }
-    >
-      {chat ? (
-        <>
-          <MenuLabel>モデル</MenuLabel>
-          <MenuRadioGroup value={chat.model} onValueChange={chat.onModelChange}>
-            {MODEL_OPTIONS.map((option) => (
-              <MenuRadioItem key={option.id} value={option.id}>
-                {option.label}
-              </MenuRadioItem>
-            ))}
-          </MenuRadioGroup>
-          <MenuSeparator />
-        </>
-      ) : null}
-      <MenuLabel>テーマ</MenuLabel>
-      <MenuRadioGroup
-        value={theme}
-        onValueChange={(value) => {
-          const next = value as ThemePreference;
-          setTheme(next);
-          applyThemePreference(next);
-        }}
-      >
-        <MenuRadioItem value="system">システム</MenuRadioItem>
-        <MenuRadioItem value="light">ライト</MenuRadioItem>
-        <MenuRadioItem value="dark">ダーク</MenuRadioItem>
-      </MenuRadioGroup>
+    <div className="flex flex-col gap-6 p-4">
+      <section>
+        <h2 className="mb-2 text-ui font-medium text-text-secondary">テーマ</h2>
+        <div role="radiogroup" aria-label="テーマ" className="flex flex-col">
+          {(
+            [
+              ["system", "システム"],
+              ["light", "ライト"],
+              ["dark", "ダーク"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={theme === value}
+              onClick={() => {
+                setTheme(value);
+                applyThemePreference(value);
+              }}
+              className={cn(
+                "flex min-h-11 items-center rounded-lg px-3 text-left text-ui",
+                theme === value ? "bg-accent-soft text-accent" : "text-text-primary hover:bg-surface",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </section>
+      <section>
+        <h2 className="mb-2 text-ui font-medium text-text-secondary">音声入力</h2>
+        <div role="radiogroup" aria-label="音声入力" className="flex flex-col">
+          {(
+            [
+              ["azure", "Azure Speech（推奨）"],
+              ["web", "Web Speech（ブラウザ内蔵）"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={speechProvider === value}
+              onClick={() => {
+                setSpeechProvider(value);
+                applySpeechProvider(value);
+              }}
+              className={cn(
+                "flex min-h-11 items-center rounded-lg px-3 text-left text-ui",
+                speechProvider === value ? "bg-accent-soft text-accent" : "text-text-primary hover:bg-surface",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 px-3 text-caption text-text-muted">
+          Azure はサーバー設定のキーを使います。Web Speech は Chrome 向けで、Brave では使えません。
+        </p>
+      </section>
       {chat?.conversationId ? (
-        <>
-          <MenuSeparator />
-          <MenuItem disabled={chat.excluded} onSelect={chat.onExclude}>
+        <section>
+          <h2 className="mb-2 text-ui font-medium text-text-secondary">この対話</h2>
+          <button
+            type="button"
+            disabled={chat.excluded}
+            onClick={chat.onExclude}
+            className="flex min-h-11 w-full items-center rounded-lg px-3 text-left text-ui text-text-primary hover:bg-accent-soft disabled:opacity-50"
+          >
             {chat.excluded ? "除外済み" : "この対話を隠す"}
-          </MenuItem>
-        </>
+          </button>
+        </section>
       ) : null}
-    </Menu>
+    </div>
   );
 }
 
@@ -152,7 +202,17 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useEffectivePathname();
   const onFiles = pathname.startsWith("/files");
   const { open, desktop, sheetOpen, setSheetOpen, setDesktopOpen, onMenuClick } = useSidebar();
+  const [settingsOpen, setSettingsOpen] = useState(false);
   useNewConversationShortcut();
+
+  useEffect(() => {
+    document.title = title === "Nousarium" ? "Nousarium" : `${title} · Nousarium`;
+  }, [title]);
+
+  function openSettings() {
+    setSheetOpen(false);
+    setSettingsOpen(true);
+  }
 
   return (
     <NotesProvider>
@@ -175,22 +235,19 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           <SidebarBody />
           <NavLinks orientation="col" />
+          <div className="border-t border-stroke p-2">
+            <SettingsButton onClick={openSettings} />
+          </div>
         </aside>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <header className="grid h-12 shrink-0 grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-center border-b border-stroke px-2">
-            <div className="flex items-center">
-              {desktop && open ? null : (
-                <IconButton label={sidebarActionLabel(onFiles, "open")} onClick={onMenuClick}>
-                  <AppMark />
-                </IconButton>
-              )}
+          {desktop && open ? null : (
+            <div className="flex h-12 shrink-0 items-center px-2">
+              <IconButton label={sidebarActionLabel(onFiles, "open")} onClick={onMenuClick}>
+                <AppMark />
+              </IconButton>
             </div>
-            <h1 className="truncate text-center text-heading font-medium">{title}</h1>
-            <div className="flex items-center justify-end">
-              <OverflowMenu />
-            </div>
-          </header>
+          )}
           {chat?.status ? (
             <p className="border-b border-accent-soft bg-accent-soft px-4 py-1 text-center text-caption text-accent">
               {chat.status}
@@ -205,7 +262,17 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
 
         <Sheet open={sheetOpen} onOpenChange={setSheetOpen} title="Nousarium" start={<AppMark />}>
-          <SidebarBody onNavigate={() => setSheetOpen(false)} />
+          <div className="flex h-full min-h-0 flex-col">
+            <SidebarBody onNavigate={() => setSheetOpen(false)} />
+            <NavLinks orientation="col" onNavigate={() => setSheetOpen(false)} />
+            <div className="border-t border-stroke p-2">
+              <SettingsButton onClick={openSettings} />
+            </div>
+          </div>
+        </Sheet>
+
+        <Sheet open={settingsOpen} onOpenChange={setSettingsOpen} side="right" title="設定">
+          <SettingsPanel />
         </Sheet>
       </div>
     </NotesProvider>

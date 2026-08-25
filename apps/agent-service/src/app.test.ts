@@ -6,9 +6,10 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { AppConfig } from "./config.js";
 
-function testConfig(dir: string) {
+function testConfig(dir: string, overrides: Partial<AppConfig> = {}): AppConfig {
   return {
     port: 0,
     vaultPath: path.join(dir, "vault"),
@@ -16,17 +17,21 @@ function testConfig(dir: string) {
     appSecret: "secret",
     cursorApiKey: undefined,
     cursorModel: "auto",
-    webOrigin: "http://127.0.0.1:3000",
+    webOrigins: ["http://127.0.0.1:3000"],
+    azureSpeechKey: undefined,
+    azureSpeechRegion: undefined,
+    azureSpeechLanguage: "ja-JP",
+    ...overrides,
   };
 }
 
-async function createTestApp(dir: string) {
+async function createTestApp(dir: string, overrides: Partial<AppConfig> = {}) {
   await initializeVault(path.join(dir, "vault"));
   const vaultPath = path.join(dir, "vault");
   const git = createGitVersionControl(vaultPath);
   await git.ensureRepo();
   return createApp({
-    config: testConfig(dir),
+    config: testConfig(dir, overrides),
     store: createSqliteStore(path.join(dir, "runtime")),
     vault: createFsVault(vaultPath),
     git,
@@ -56,6 +61,11 @@ describe("agent-service", () => {
       const { token } = (await login.json()) as { token: string };
       const listed = await app.request("/conversations", { headers: { authorization: `Bearer ${token}` } });
       expect(listed.status).toBe(200);
+      const models = await app.request("/models", { headers: { authorization: `Bearer ${token}` } });
+      expect(models.status).toBe(200);
+      const catalog = (await models.json()) as { default: string; models: Array<{ id: string; label: string }> };
+      expect(catalog.default).toBe("auto");
+      expect(catalog.models.some((model) => model.id === "auto")).toBe(true);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -183,6 +193,60 @@ describe("agent-service", () => {
       const found = (await byJournal.json()) as { conversation: { id: string } | null };
       expect(found.conversation?.id).toBe(conversation.id);
     } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("returns 503 for speech token when azure is not configured", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "nousarium-speech-"));
+    try {
+      const app = await createTestApp(dir);
+      const login = await app.request("/login", { method: "POST" });
+      const { token } = (await login.json()) as { token: string };
+      const denied = await app.request("/speech/token");
+      expect(denied.status).toBe(401);
+      const missing = await app.request("/speech/token", { headers: { authorization: `Bearer ${token}` } });
+      expect(missing.status).toBe(503);
+      const health = await app.request("/health");
+      const body = (await health.json()) as { azureSpeech: boolean };
+      expect(body.azureSpeech).toBe(false);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("issues speech token when azure is configured", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "nousarium-speech-ok-"));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("speech-token-value", { status: 200 }),
+    );
+    try {
+      const app = await createTestApp(dir, {
+        azureSpeechKey: "test-key",
+        azureSpeechRegion: "japaneast",
+        azureSpeechLanguage: "ja-JP",
+      });
+      const login = await app.request("/login", { method: "POST" });
+      const { token } = (await login.json()) as { token: string };
+      const issued = await app.request("/speech/token", { headers: { authorization: `Bearer ${token}` } });
+      expect(issued.status).toBe(200);
+      const payload = (await issued.json()) as { token: string; region: string; language: string };
+      expect(payload).toEqual({
+        token: "speech-token-value",
+        region: "japaneast",
+        language: "ja-JP",
+      });
+      expect(fetchMock).toHaveBeenCalledWith(
+        "https://japaneast.api.cognitive.microsoft.com/sts/v1.0/issueToken",
+        expect.objectContaining({
+          method: "POST",
+          headers: expect.objectContaining({
+            "Ocp-Apim-Subscription-Key": "test-key",
+          }),
+        }),
+      );
+    } finally {
+      fetchMock.mockRestore();
       await rm(dir, { recursive: true, force: true });
     }
   });

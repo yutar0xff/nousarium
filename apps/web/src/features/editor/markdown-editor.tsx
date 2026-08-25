@@ -3,18 +3,22 @@
 import type { EditorProps } from "./types";
 import { CodeMirrorMarkdownEditor } from "./adapters/codemirror/codemirror-editor";
 import { MarkdownPreview } from "./preview";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { cn, IconButton, SinglePaneIcon, SplitPaneIcon } from "@nousarium/ui";
 import { useEditorLayout } from "../../lib/use-editor-layout";
 
-export function MarkdownEditor({ knownNotes, ...props }: EditorProps & { knownNotes?: string[] }) {
-  const [tab, setTab] = useState<"edit" | "preview">("edit");
+export function MarkdownEditor({
+  knownNotes,
+  toolbar,
+  ...props
+}: EditorProps & { knownNotes?: string[]; toolbar?: ReactNode }) {
+  const [tab, setTab] = useState<"edit" | "preview">("preview");
   const { layout, setEditorLayout } = useEditorLayout();
   const split = layout === "split";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-stroke">
-      <div className="flex shrink-0 items-center gap-1 border-b border-stroke p-1">
+      <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-stroke p-1">
         {split ? (
           <p className="px-3 text-ui text-text-secondary">原文とプレビュー</p>
         ) : (
@@ -27,14 +31,16 @@ export function MarkdownEditor({ knownNotes, ...props }: EditorProps & { knownNo
             </EditorTab>
           </div>
         )}
-        <IconButton
-          className="ml-auto"
-          label={split ? "1ペインにする" : "2ペインにする"}
-          aria-pressed={split}
-          onClick={() => setEditorLayout(split ? "tab" : "split")}
-        >
-          {split ? <SinglePaneIcon /> : <SplitPaneIcon />}
-        </IconButton>
+        <div className="ml-auto flex items-center gap-1">
+          {toolbar}
+          <IconButton
+            label={split ? "1ペインにする" : "2ペインにする"}
+            aria-pressed={split}
+            onClick={() => setEditorLayout(split ? "tab" : "split")}
+          >
+            {split ? <SinglePaneIcon /> : <SplitPaneIcon />}
+          </IconButton>
+        </div>
       </div>
       <div className={cn("flex min-h-0 flex-1 overflow-hidden", split ? "flex-row" : "flex-col")}>
         <section

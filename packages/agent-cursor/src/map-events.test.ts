@@ -39,4 +39,10 @@ describe("cursor adapter mapping", () => {
     expect(events[0]).toBe("run.started");
     expect(events.at(-1)).toBe("run.finished");
   });
+
+  it("lists built-in models", async () => {
+    const port = createScriptedAgentPort();
+    const models = await port.listModels();
+    expect(models.some((model) => model.id === "auto")).toBe(true);
+  });
 });

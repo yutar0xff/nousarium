@@ -3,7 +3,11 @@
   "private": true,
   "packageManager": "pnpm@10.30.3",
   "scripts": {
-    "dev": "pnpm --filter @nousarium/agent-service --filter @nousarium/web --parallel dev",
+    "dev": "pnpm --filter @nousarium/web dev",
+    "agent:up": "docker compose up -d --build agent-service",
+    "agent:down": "docker compose stop agent-service",
+    "agent:logs": "docker compose logs -f agent-service",
+    "dev:agent": "pnpm --filter @nousarium/agent-service dev",
     "build": "pnpm -r --if-present build",
     "test": "pnpm -r --if-present test",
     "lint": "pnpm -r --if-present lint && node scripts/check-boundaries.mjs",

@@ -152,3 +152,50 @@ export function SinglePaneIcon(props: IconProps) {
     </Icon>
   );
 }
+
+export function SettingsIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 4.5v1.6M12 17.9v1.6M19.5 12h-1.6M6.1 12H4.5M16.8 7.2l-1.1 1.1M8.3 15.7l-1.1 1.1M16.8 16.8l-1.1-1.1M8.3 8.3L7.2 7.2" />
+    </Icon>
+  );
+}
+
+export function MicIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z" />
+      <path d="M7 11a5 5 0 0 0 10 0M12 16v4M9 20h6" />
+    </Icon>
+  );
+}
+
+/** 音声入力のキャンセル（四角） */
+export function SpeechCancelIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="6.5" y="6.5" width="11" height="11" rx="1.5" fill="currentColor" stroke="none" />
+    </Icon>
+  );
+}
+
+/** 音声入力を止めて編集（一時停止） */
+export function SpeechEditIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="7" y="6" width="3.5" height="12" rx="1" fill="currentColor" stroke="none" />
+      <rect x="13.5" y="6" width="3.5" height="12" rx="1" fill="currentColor" stroke="none" />
+    </Icon>
+  );
+}
+
+/** 音声入力の即時送信（紙ヒコーキ） */
+export function SpeechSendIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4.5 11.5L19.5 4.5 14.5 19.5 11.5 13.5z" />
+      <path d="M11.5 13.5L19.5 4.5" />
+    </Icon>
+  );
+}

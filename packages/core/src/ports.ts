@@ -26,6 +26,7 @@ export interface AgentPort {
   send(input: AgentInput): AsyncIterable<AgentEvent>;
   cancel(runId: string): Promise<void>;
   generateConversationTitle(message: string, model?: string): Promise<string>;
+  listModels(): Promise<Array<{ id: string; label: string }>>;
 }
 
 export interface VaultPort {

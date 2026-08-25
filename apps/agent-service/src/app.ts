@@ -12,7 +12,6 @@ import {
   applyPendingPolicy,
   CONVERSATION_TITLE_PLACEHOLDER,
   DEFAULT_ACCESS_POLICY,
-  MODEL_OPTIONS,
   needsGeneratedTitle,
   snapshotPolicy,
 } from "@nousarium/core";
@@ -24,6 +23,7 @@ import type { AppConfig } from "./config.js";
 import { appendJournal, writeRunLinks } from "./journal.js";
 import { findConversationForJournal, loadNoteRelations } from "./note-relations.js";
 import { Mutex } from "./mutex.js";
+import { issueAzureSpeechToken, speechConfigReady } from "./speech-token.js";
 
 export function createApp(input: {
   config: AppConfig;
@@ -46,22 +46,35 @@ export function createApp(input: {
   }
 
   const app = new Hono();
-  app.use("*", cors({ origin: config.webOrigin, allowHeaders: ["content-type", "authorization"], credentials: true }));
+  app.use("*", cors({ origin: config.webOrigins, allowHeaders: ["content-type", "authorization"], credentials: true }));
   app.use("*", authMiddleware(config.appSecret));
 
   app.get("/health", (c) =>
     c.json({
       ok: true,
       cursor: Boolean(config.cursorApiKey),
+      azureSpeech: speechConfigReady(config),
     }),
   );
 
   app.post("/login", async (c) => c.json({ token: signToken(config.appSecret, "owner") }));
 
-  app.get("/models", (c) =>
+  app.get("/speech/token", async (c) => {
+    if (!speechConfigReady(config)) {
+      return c.json({ error: "azure speech is not configured" }, 503);
+    }
+    try {
+      return c.json(await issueAzureSpeechToken(config));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "azure speech token failed";
+      return c.json({ error: message }, 502);
+    }
+  });
+
+  app.get("/models", async (c) =>
     c.json({
       default: config.cursorModel,
-      models: MODEL_OPTIONS,
+      models: await agent.listModels(),
     }),
   );
 
@@ -159,23 +172,20 @@ export function createApp(input: {
           accessPolicy: policy.accessPolicy,
         });
         const userTurns = (await store.listMessages(conversationId)).filter((message) => message.role === "user").length;
+        let writeChain = Promise.resolve();
+        const writeEvent = (data: unknown) => {
+          writeChain = writeChain.then(() => stream.writeSSE({ data: JSON.stringify(data) }));
+          return writeChain;
+        };
+        let titlePromise: Promise<string> | null = null;
         if (userTurns === 1 && needsGeneratedTitle(conversation.title)) {
-          await stream.writeSSE({
-            data: JSON.stringify({ type: "run.status", runId, phase: "titling" }),
-          });
-          const title = await agent.generateConversationTitle(body.content, policy.model);
-          conversation = await store.updateConversation(conversation.id, { title });
-          await stream.writeSSE({
-            data: JSON.stringify({ type: "conversation.titled", conversationId: conversation.id, title }),
-          });
+          titlePromise = agent.generateConversationTitle(body.content, policy.model);
         }
         const history = await store.listMessages(conversationId);
         running.add(conversationId);
         const writes = policy.accessPolicy === "vault";
         try {
-          await stream.writeSSE({
-            data: JSON.stringify({ type: "run.status", runId, phase: "checkpoint" }),
-          });
+          await writeEvent({ type: "run.status", runId, phase: "checkpoint" });
           const gitBefore = await vaultLock.run(async () => git.checkpoint(`nousarium-pre:${runId}`));
           await store.createRun({
             id: runId,
@@ -186,9 +196,7 @@ export function createApp(input: {
             gitBefore,
             startedAt: new Date().toISOString(),
           });
-          await stream.writeSSE({
-            data: JSON.stringify({ type: "run.status", runId, phase: "starting" }),
-          });
+          await writeEvent({ type: "run.status", runId, phase: "starting" });
 
           let assistant = "";
           let agentStatus: "finished" | "error" | "cancelled" = "finished";
@@ -213,11 +221,23 @@ export function createApp(input: {
                 if (event.result && !assistant) assistant = event.result;
                 continue;
               }
-              await stream.writeSSE({ data: JSON.stringify(event) });
+              await writeEvent(event);
             }
           };
           if (writes) await vaultLock.run(send);
           else await send();
+
+          if (titlePromise) {
+            const title = await titlePromise.catch(() => null);
+            if (title) {
+              conversation = await store.updateConversation(conversation.id, { title });
+              await writeEvent({
+                type: "conversation.titled",
+                conversationId: conversation.id,
+                title,
+              });
+            }
+          }
 
           if (agentStatus === "error") {
             await store.updateRun(runId, {
@@ -225,9 +245,7 @@ export function createApp(input: {
               error: agentError,
               finishedAt: new Date().toISOString(),
             });
-            await stream.writeSSE({
-              data: JSON.stringify({ type: "run.finished", runId, status: "error", error: agentError }),
-            });
+            await writeEvent({ type: "run.finished", runId, status: "error", error: agentError });
             return;
           }
 
@@ -259,25 +277,22 @@ export function createApp(input: {
             gitAfter,
             finishedAt: new Date().toISOString(),
           });
-          await stream.writeSSE({
-            data: JSON.stringify({
-              type: "run.finished",
-              runId,
-              status: agentStatus === "cancelled" ? "cancelled" : "finished",
-              result: assistant,
-              diffs,
-            }),
+          await writeEvent({
+            type: "run.finished",
+            runId,
+            status: agentStatus === "cancelled" ? "cancelled" : "finished",
+            result: assistant,
+            diffs,
           });
         } catch (error) {
+          if (titlePromise) await titlePromise.catch(() => undefined);
           const message = error instanceof Error ? error.message : String(error);
           await store.updateRun(runId, {
             status: "error",
             error: message,
             finishedAt: new Date().toISOString(),
           });
-          await stream.writeSSE({
-            data: JSON.stringify({ type: "run.finished", runId, status: "error", error: message }),
-          });
+          await writeEvent({ type: "run.finished", runId, status: "error", error: message });
         } finally {
           running.delete(conversationId);
         }

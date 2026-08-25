@@ -1,6 +1,6 @@
 import type { AgentEvent } from "@nousarium/contracts";
 import type { AgentInput, AgentPort } from "@nousarium/core";
-import { ACCESS_POLICY_LABELS, fallbackConversationTitle } from "@nousarium/core";
+import { ACCESS_POLICY_LABELS, fallbackConversationTitle, MODEL_OPTIONS, normalizeModelOptions } from "@nousarium/core";
 
 export function createScriptedAgentPort(): AgentPort {
   const cancelled = new Set<string>();
@@ -34,6 +34,9 @@ export function createScriptedAgentPort(): AgentPort {
     },
     async generateConversationTitle(message) {
       return fallbackConversationTitle(message);
+    },
+    async listModels() {
+      return normalizeModelOptions(MODEL_OPTIONS.map((option) => ({ id: option.id, label: option.label })));
     },
   };
 }

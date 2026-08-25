@@ -15,8 +15,8 @@ services:
     build:
       context: .
       dockerfile: docker/agent.Dockerfile
-    expose:
-      - "8787"
+    ports:
+      - "127.0.0.1:8787:8787"
     environment:
       PORT: "8787"
       HOME: /tmp
@@ -25,7 +25,10 @@ services:
       NOUSARIUM_APP_SECRET: ${NOUSARIUM_APP_SECRET}
       CURSOR_API_KEY: ${CURSOR_API_KEY}
       CURSOR_MODEL: ${CURSOR_MODEL:-auto}
-      WEB_ORIGIN: ${WEB_ORIGIN:-http://127.0.0.1:13000}
+      AZURE_SPEECH_KEY: ${AZURE_SPEECH_KEY:-}
+      AZURE_SPEECH_REGION: ${AZURE_SPEECH_REGION:-japaneast}
+      AZURE_SPEECH_LANGUAGE: ${AZURE_SPEECH_LANGUAGE:-ja-JP}
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://127.0.0.1:3000,http://127.0.0.1:13000}
     volumes:
       - ${NOUSARIUM_VAULT_PATH:-./data/vault}:/vault
       - ${NOUSARIUM_RUNTIME_PATH:-./data/runtime}:/runtime

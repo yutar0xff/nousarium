@@ -6,12 +6,18 @@ import { isJournalPath, noteTitleFromPath, resolveWikiTarget } from "@nousarium/
 import {
   Button,
   ChevronDownIcon,
+  cn,
   IconButton,
+  MicIcon,
+  Select,
   SendIcon,
   Sheet,
+  SpeechCancelIcon,
+  SpeechEditIcon,
+  SpeechSendIcon,
   StopIcon,
-  Switch,
   Textarea,
+  useToast,
 } from "@nousarium/ui";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
@@ -19,10 +25,12 @@ import { api, streamMessage } from "../lib/api";
 import { consumeNewConversationRequest, NEW_CONVERSATION } from "../lib/new-conversation";
 import { RUN_STATUS_LABELS, runStatusLabel, toolStatusLabel } from "../lib/run-status";
 import { replaceConversationPath } from "../lib/pathname";
+import { useSpeechInput } from "../lib/use-speech-input";
 import { MarkdownPreview } from "../features/editor/preview";
 import { DiffView, summarizeDiffs } from "./diff-view";
 import { notifyConversationsChanged } from "./conversation-sidebar";
 import { useChrome } from "./chrome-context";
+import { useModels } from "../lib/use-models";
 
 type ToolRow = {
   id: string;
@@ -53,10 +61,17 @@ function isJournalDiff(diff: FileDiff) {
 
 export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
   const { setTitle, setChat } = useChrome();
+  const { optionsFor, defaultModel } = useModels();
+  const { toast } = useToast();
   const router = useRouter();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const speech = useSpeechInput({
+    onError: (message) => toast(message, "danger"),
+  });
+  const speechRef = useRef(speech);
+  speechRef.current = speech;
   const [tools, setTools] = useState<ToolRow[]>([]);
   const [runId, setRunId] = useState<string | null>(null);
   const [finishedRunId, setFinishedRunId] = useState<string | null>(null);
@@ -65,7 +80,6 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
   const [runDiffs, setRunDiffs] = useState<FileDiff[]>([]);
   const [retryContent, setRetryContent] = useState<string | null>(null);
   const [model, setModel] = useState("auto");
-  const [accessPolicy, setAccessPolicy] = useState<AccessPolicy>(DEFAULT_ACCESS_POLICY);
   const [excluded, setExcluded] = useState(false);
   const [reverting, setReverting] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
@@ -83,11 +97,8 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
 
   const activeConversationId = conversationId ?? conversation?.id;
   const isNewChat = !activeConversationId;
-  const currentAccess = conversation
-    ? (conversation.pendingAccessPolicy ?? conversation.accessPolicy)
-    : accessPolicy;
   const currentModel = conversation ? (conversation.pendingModel ?? conversation.model) : model;
-  const pending = conversation?.pendingAccessPolicy || conversation?.pendingModel ? "次の送信から適用" : null;
+  const pending = conversation?.pendingModel ? "次の送信から適用" : null;
   const noteDiffs = runDiffs.filter((diff) => !isJournalDiff(diff));
   const journalDiffs = runDiffs.filter(isJournalDiff);
   const showWelcome = isNewChat && messages.length === 0 && !busy;
@@ -99,13 +110,20 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
 
   async function load(id: string) {
     const data = await api<{ conversation: Conversation; messages: Message[] }>(`/conversations/${id}`);
-    setConversation(data.conversation);
+    let next = data.conversation;
+    if (next.accessPolicy !== "vault" || next.pendingAccessPolicy === "chat") {
+      next = await api<Conversation>(`/conversations/${id}/policy`, {
+        method: "PATCH",
+        body: JSON.stringify({ accessPolicy: DEFAULT_ACCESS_POLICY }),
+      });
+    }
+    setConversation(next);
     setMessages(data.messages);
-    setModel(data.conversation.model);
-    setAccessPolicy(data.conversation.accessPolicy);
+    setModel(next.model);
   }
 
   function resetChatState() {
+    if (speechRef.current.listening) void speechRef.current.stop();
     setConversation(null);
     setMessages([]);
     setTools([]);
@@ -156,6 +174,11 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
       ];
     });
   }
+
+  useEffect(() => {
+    if (conversationId || conversation) return;
+    setModel(defaultModel);
+  }, [defaultModel, conversationId, conversation]);
 
   useEffect(() => {
     if (!conversationId) {
@@ -239,14 +262,12 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
   useEffect(() => {
     setChat({
       conversationId: activeConversationId ?? null,
-      model: currentModel,
-      onModelChange: (next) => void changePolicy({ model: next }),
       excluded,
       onExclude: () => void excludeJournal(),
       pending,
       status: busy ? waitLabel : null,
     });
-  }, [activeConversationId, currentModel, excluded, pending, conversation?.id, busy, waitLabel]);
+  }, [activeConversationId, excluded, pending, conversation?.id, busy, waitLabel, setChat]);
 
   useEffect(() => {
     return () => setChat(null);
@@ -254,7 +275,6 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
 
   async function changePolicy(patch: { accessPolicy?: AccessPolicy; model?: string }) {
     if (!activeConversationId) {
-      if (patch.accessPolicy) setAccessPolicy(patch.accessPolicy);
       if (patch.model) setModel(patch.model);
       return;
     }
@@ -271,7 +291,7 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
       method: "POST",
       body: JSON.stringify({
         model,
-        accessPolicy,
+        accessPolicy: DEFAULT_ACCESS_POLICY,
       }),
     });
     notifyConversationsChanged();
@@ -298,7 +318,7 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
           role: "user",
           content,
           runId: null,
-          accessPolicy: conversation?.accessPolicy ?? accessPolicy,
+          accessPolicy: conversation?.accessPolicy ?? DEFAULT_ACCESS_POLICY,
           createdAt: new Date().toISOString(),
         },
       ]);
@@ -313,7 +333,7 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
           setRunId(event.runId);
           setWaitLabel(RUN_STATUS_LABELS.starting);
           upsertAssistantMessage(event.runId, targetId, "", {
-            accessPolicy: conversation?.accessPolicy ?? accessPolicy,
+            accessPolicy: conversation?.accessPolicy ?? DEFAULT_ACCESS_POLICY,
           });
         }
         if (event.type === "agent.bound") {
@@ -386,9 +406,9 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
     }
   }
 
-  async function send() {
-    if (!input.trim() || busy) return;
-    const content = input.trim();
+  async function sendContent(raw: string) {
+    if (!raw.trim() || busy) return;
+    const content = raw.trim();
     setInput("");
     if (textareaRef.current) {
       textareaRef.current.style.height = "";
@@ -403,6 +423,50 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
       setBusy(false);
       setWaitLabel(null);
     }
+  }
+
+  async function send() {
+    await sendContent(input);
+  }
+
+  useEffect(() => {
+    if (!speech.listening) return;
+    setInput(speech.draft);
+    requestAnimationFrame(() => resizeTextarea());
+  }, [speech.draft, speech.listening]);
+
+  useEffect(() => {
+    return () => {
+      if (speechRef.current.listening) void speechRef.current.stop();
+    };
+  }, [conversationId]);
+
+  function startSpeech() {
+    if (busy || speech.listening) return;
+    speech.start(input);
+  }
+
+  async function cancelSpeech() {
+    if (!speech.listening) return;
+    await speech.stop();
+    setInput(speech.baseText);
+    requestAnimationFrame(() => resizeTextarea());
+  }
+
+  async function editSpeech() {
+    if (!speech.listening) return;
+    const content = await speech.stop();
+    setInput(content);
+    requestAnimationFrame(() => {
+      resizeTextarea();
+      textareaRef.current?.focus();
+    });
+  }
+
+  async function sendSpeechNow() {
+    if (!speech.listening) return;
+    const content = await speech.stop();
+    await sendContent(content);
   }
 
   async function revertLastRun() {
@@ -433,6 +497,7 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
   }
 
   function onComposerKey(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (speech.listening) return;
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       void send();
@@ -505,27 +570,75 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
     </div>
   );
 
+  const modelPicker = (
+    <Select
+      aria-label="モデル"
+      className="w-[10rem] px-2"
+      value={currentModel}
+      onChange={(event) => void changePolicy({ model: event.target.value })}
+    >
+      {optionsFor(currentModel).map((option) => (
+        <option key={option.id} value={option.id}>
+          {option.label}
+        </option>
+      ))}
+    </Select>
+  );
+
   const composer = (
-    <div className="shrink-0 border-t border-stroke bg-surface px-3 py-2">
-      <div className="mx-auto flex max-w-[46rem] items-end gap-2">
-        <Switch
-          checked={currentAccess === "vault"}
-          onCheckedChange={(checked) => void changePolicy({ accessPolicy: checked ? "vault" : "chat" })}
-          label="Vault"
-        />
+    <div
+      className={cn(
+        "mx-auto w-full max-w-[46rem] rounded-2xl border border-stroke bg-surface-elevated p-2 shadow-float",
+        "focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-stroke-strong",
+      )}
+    >
+      <div className="flex items-end gap-2">
         <Textarea
           ref={textareaRef}
-          className="max-h-[14rem] min-h-11 w-auto min-w-0 flex-1"
+          className="max-h-[14rem] min-h-11 w-auto min-w-0 flex-1 border-0 bg-transparent focus-visible:outline-none"
           value={input}
           rows={1}
-          placeholder="メッセージを書く"
+          placeholder={speech.listening ? "聞いています…" : "メッセージを書く"}
+          readOnly={speech.listening}
           onChange={(event) => {
+            if (speech.listening) return;
             setInput(event.target.value);
             resizeTextarea();
           }}
           onKeyDown={onComposerKey}
         />
-        {busy && activeConversationId ? (
+        {speech.listening ? (
+          <>
+            <IconButton variant="danger" label="音声入力をキャンセル" onClick={() => void cancelSpeech()}>
+              <SpeechCancelIcon />
+            </IconButton>
+            <IconButton variant="ghost" label="音声入力を止めて編集" onClick={() => void editSpeech()}>
+              <SpeechEditIcon />
+            </IconButton>
+            <IconButton variant="primary" label="音声入力を送信" onClick={() => void sendSpeechNow()}>
+              <SpeechSendIcon />
+            </IconButton>
+          </>
+        ) : speech.supported ? (
+          <IconButton
+            variant="ghost"
+            label="音声入力を開始"
+            aria-pressed={false}
+            onClick={startSpeech}
+            disabled={busy}
+          >
+            <MicIcon />
+          </IconButton>
+        ) : speech.provider === "azure" ? (
+          <IconButton
+            variant="ghost"
+            label="Azure 音声が未設定です。設定で Web Speech に切り替えられます"
+            disabled
+          >
+            <MicIcon />
+          </IconButton>
+        ) : null}
+        {speech.listening ? null : busy && activeConversationId ? (
           <IconButton
             variant="danger"
             label="停止"
@@ -546,80 +659,88 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
 
   return (
     <div className="relative flex h-full min-h-0 flex-1">
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div
-          ref={scrollerRef}
-          className="min-h-0 flex-1 overflow-y-auto px-3 py-3 md:px-4 md:py-4"
-          onScroll={onScrollerScroll}
-        >
-          {showWelcome ? (
-            <div className="mx-auto flex max-w-[46rem] flex-col items-center gap-3 px-2 pt-8 text-center md:pt-16">
-              <h2 className="text-title font-semibold text-text-primary md:text-display">何を考えていますか？</h2>
-              <p className="text-ui text-text-secondary">質問の深さも、ノートに残すかも、AI が判断します。</p>
+      <div className="relative flex min-w-0 flex-1 flex-col">
+        <div className="absolute left-3 top-2 z-10 md:left-4">{modelPicker}</div>
+        {showWelcome ? (
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-3 py-6 md:px-4">
+            <div className="flex w-full max-w-[46rem] flex-col gap-6">
+              <div className="text-center">
+                <h2 className="text-title font-semibold text-text-primary md:text-display">何を考えていますか？</h2>
+                <p className="mt-2 text-ui text-text-secondary">質問の深さも、ノートに残すかも、AI が判断します。</p>
+              </div>
+              {composer}
             </div>
-          ) : (
-            <div className="mx-auto flex max-w-[46rem] flex-col gap-6" aria-live="polite">
-              {messages.map((message) => {
-                if (message.role === "assistant" && !message.content) return null;
-                const streaming = Boolean(busy && message.role === "assistant" && message.runId === runId);
-                if (message.role === "user") {
-                  return <UserBubble key={message.runId ?? message.id} content={message.content} />;
-                }
-                return (
-                  <article key={message.runId ?? message.id} className="border-l-2 border-accent pl-4">
-                    {retryContent && message.content && !streaming ? (
-                      <div className="mb-2" aria-live="assertive">
-                        <Button variant="secondary" onClick={() => void sendMessage(retryContent)}>
-                          再送
-                        </Button>
-                      </div>
-                    ) : null}
-                    <MarkdownPreview
-                      value={message.content}
-                      knownNotes={knownNotes}
-                      streaming={streaming}
-                      onWikiLink={openWikiTarget}
-                    />
+          </div>
+        ) : (
+          <>
+            <div
+              ref={scrollerRef}
+              className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-16 md:px-4 md:pb-4"
+              onScroll={onScrollerScroll}
+            >
+              <div className="mx-auto flex max-w-[46rem] flex-col gap-6" aria-live="polite">
+                {messages.map((message) => {
+                  if (message.role === "assistant" && !message.content) return null;
+                  const streaming = Boolean(busy && message.role === "assistant" && message.runId === runId);
+                  if (message.role === "user") {
+                    return <UserBubble key={message.runId ?? message.id} content={message.content} />;
+                  }
+                  return (
+                    <article key={message.runId ?? message.id} className="border-l-2 border-accent pl-4">
+                      {retryContent && message.content && !streaming ? (
+                        <div className="mb-2" aria-live="assertive">
+                          <Button variant="secondary" onClick={() => void sendMessage(retryContent)}>
+                            再送
+                          </Button>
+                        </div>
+                      ) : null}
+                      <MarkdownPreview
+                        value={message.content}
+                        knownNotes={knownNotes}
+                        streaming={streaming}
+                        onWikiLink={openWikiTarget}
+                      />
+                    </article>
+                  );
+                })}
+                {showWait ? (
+                  <article className="border-l-2 border-accent pl-4">
+                    <p className="text-ui text-text-secondary">
+                      {waitLabel}
+                      <span className="stream-caret" />
+                    </p>
                   </article>
-                );
-              })}
-              {showWait ? (
-                <article className="border-l-2 border-accent pl-4">
-                  <p className="text-ui text-text-secondary">
-                    {waitLabel}
-                    <span className="stream-caret" />
-                  </p>
-                </article>
-              ) : null}
-              {tools.length > 0 ? (
-                <section className="flex flex-col gap-1">
-                  {tools.map((tool) => (
-                    <details key={tool.id} className="text-caption text-text-muted">
-                      <summary className="cursor-pointer">
-                        {tool.tool} · {tool.status === "completed" ? "完了" : "実行中"}
-                      </summary>
-                      {tool.detail ? <pre className="mt-1 overflow-x-auto rounded-xl bg-surface-sunken p-2 font-mono text-mono">{tool.detail}</pre> : null}
-                    </details>
-                  ))}
-                </section>
-              ) : null}
-              {runDiffs.length > 0 ? (
-                <button
-                  type="button"
-                  className="self-start rounded-lg text-ui text-accent underline-offset-2 hover:underline"
-                  onClick={() => {
-                    setPreview(null);
-                    setContextOpen(true);
-                  }}
-                >
-                  {diffSummary}
-                </button>
-              ) : null}
-              <div ref={bottom} />
+                ) : null}
+                {tools.length > 0 ? (
+                  <section className="flex flex-col gap-1">
+                    {tools.map((tool) => (
+                      <details key={tool.id} className="text-caption text-text-muted">
+                        <summary className="cursor-pointer">
+                          {tool.tool} · {tool.status === "completed" ? "完了" : "実行中"}
+                        </summary>
+                        {tool.detail ? <pre className="mt-1 overflow-x-auto rounded-xl bg-surface-sunken p-2 font-mono text-mono">{tool.detail}</pre> : null}
+                      </details>
+                    ))}
+                  </section>
+                ) : null}
+                {runDiffs.length > 0 ? (
+                  <button
+                    type="button"
+                    className="self-start rounded-lg text-ui text-accent underline-offset-2 hover:underline"
+                    onClick={() => {
+                      setPreview(null);
+                      setContextOpen(true);
+                    }}
+                  >
+                    {diffSummary}
+                  </button>
+                ) : null}
+                <div ref={bottom} />
+              </div>
             </div>
-          )}
-        </div>
-        {composer}
+            <div className="shrink-0 px-3 pb-3 pt-1 md:px-4">{composer}</div>
+          </>
+        )}
       </div>
 
       {contextOpen ? (
