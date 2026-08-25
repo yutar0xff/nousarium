@@ -1,8 +1,8 @@
 "use client";
 
-import type { AccessPolicy, AgentEvent, Conversation, FileDiff, Message, VaultDocument } from "@nousarium/contracts";
+import type { AccessPolicy, AgentEvent, Conversation, FileDiff, Message } from "@nousarium/contracts";
 import { DEFAULT_ACCESS_POLICY } from "@nousarium/core";
-import { isJournalPath, noteTitleFromPath, resolveWikiTarget } from "@nousarium/markdown";
+import { isJournalPath, noteTitleFromPath } from "@nousarium/markdown";
 import {
   Button,
   ChevronDownIcon,
@@ -26,6 +26,7 @@ import { consumeNewConversationRequest, NEW_CONVERSATION } from "../lib/new-conv
 import { RUN_STATUS_LABELS, runStatusLabel, toolStatusLabel } from "../lib/run-status";
 import { replaceConversationPath } from "../lib/pathname";
 import { useSpeechInput } from "../lib/use-speech-input";
+import { useWikiNavigation } from "../lib/use-wiki-navigation";
 import { MarkdownPreview } from "../features/editor/preview";
 import { DiffView, summarizeDiffs } from "./diff-view";
 import { notifyConversationsChanged } from "./conversation-sidebar";
@@ -83,8 +84,8 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
   const [excluded, setExcluded] = useState(false);
   const [reverting, setReverting] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
-  const [preview, setPreview] = useState<VaultDocument | null>(null);
   const [knownNotes, setKnownNotes] = useState<string[]>([]);
+  const openWikiTarget = useWikiNavigation();
   const bottom = useRef<HTMLDivElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const followOutputRef = useRef(true);
@@ -132,7 +133,6 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
     setFinishedRunId(null);
     setRetryContent(null);
     setExcluded(false);
-    setPreview(null);
     setContextOpen(false);
     setInput("");
     setBusy(false);
@@ -504,44 +504,8 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
     }
   }
 
-  async function openWikiTarget(target: string) {
-    const path = resolveWikiTarget(target);
-    if (isJournalPath(path)) {
-      try {
-        const found = await api<{ conversation: Conversation | null }>(
-          `/conversations/by-journal?path=${encodeURIComponent(path)}`,
-        );
-        if (found.conversation) {
-          router.push(`/c/${found.conversation.id}`);
-          return;
-        }
-      } catch {
-        return;
-      }
-      return;
-    }
-    try {
-      const doc = await api<VaultDocument>(`/vault/file?path=${encodeURIComponent(path)}`);
-      setPreview(doc);
-      setContextOpen(true);
-    } catch {
-      setPreview({ path, content: "", hash: "" });
-      setContextOpen(true);
-    }
-  }
-
   const contextBody = (
     <div className="flex h-full flex-col gap-4 overflow-y-auto p-4">
-      {preview ? (
-        <section>
-          <h2 className="mb-2 text-heading font-medium">{noteTitleFromPath(preview.path)}</h2>
-          {preview.content ? (
-            <MarkdownPreview value={preview.content} knownNotes={knownNotes} />
-          ) : (
-            <p className="text-ui text-text-muted">まだノートはありません。</p>
-          )}
-        </section>
-      ) : null}
       {runDiffs.length > 0 ? (
         <section>
           <div className="mb-2 flex items-center justify-between gap-2">
@@ -728,7 +692,6 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
                     type="button"
                     className="self-start rounded-lg text-ui text-accent underline-offset-2 hover:underline"
                     onClick={() => {
-                      setPreview(null);
                       setContextOpen(true);
                     }}
                   >

@@ -10,8 +10,13 @@ import { useEditorLayout } from "../../lib/use-editor-layout";
 export function MarkdownEditor({
   knownNotes,
   toolbar,
+  onWikiLink,
   ...props
-}: EditorProps & { knownNotes?: string[]; toolbar?: ReactNode }) {
+}: EditorProps & {
+  knownNotes?: string[];
+  toolbar?: ReactNode;
+  onWikiLink?: (target: string) => void;
+}) {
   const [tab, setTab] = useState<"edit" | "preview">("preview");
   const { layout, setEditorLayout } = useEditorLayout();
   const split = layout === "split";
@@ -60,7 +65,7 @@ export function MarkdownEditor({
           )}
         >
           <div className="p-4">
-            <MarkdownPreview value={props.value} knownNotes={knownNotes} />
+            <MarkdownPreview value={props.value} knownNotes={knownNotes} onWikiLink={onWikiLink} />
           </div>
         </section>
       </div>

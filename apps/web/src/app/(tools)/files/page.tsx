@@ -9,6 +9,7 @@ import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "
 import { MarkdownEditor } from "../../../features/editor/markdown-editor";
 import { api } from "../../../lib/api";
 import { filesHref, notesInSelection, titleFrom } from "../../../lib/tag-tree";
+import { useWikiNavigation } from "../../../lib/use-wiki-navigation";
 import { ConflictPanel, parseVaultConflict } from "../../../components/conflict-panel";
 import { useChrome } from "../../../components/chrome-context";
 import { notifyNotesChanged, useNotes } from "../../../components/notes-context";
@@ -31,6 +32,7 @@ function FilesWorkspace() {
   const router = useRouter();
   const params = useSearchParams();
   const { items, knownNotes } = useNotes();
+  const openWikiTarget = useWikiNavigation(items);
   const tag = params.get("tag");
   const untagged = params.get("untagged") === "1";
   const notePath = params.get("path");
@@ -234,6 +236,7 @@ function FilesWorkspace() {
           <MarkdownEditor
             value={doc.content}
             knownNotes={knownNotes}
+            onWikiLink={(target) => void openWikiTarget(target)}
             onChange={(content) => {
               setDoc({ ...doc, content });
             }}

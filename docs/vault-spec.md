@@ -134,14 +134,14 @@ tags: [思考/内省, 技術/TypeScript]
 
 | ファイル | 対象 |
 | --- | --- |
-| `AGENTS.md` | 毎ターンの判断、検索、応答の深さ、残す / 残さない、分類の歪みの提案 |
+| `AGENTS.md` | 毎ターンの判断、Vault 検索、Web 検索、応答の深さ、残す / 残さない、分類の歪みの提案 |
 | `.cursor/rules/note-format.mdc` | `Notes/**` の書式、type、タグ参照 |
 | `.cursor/rules/journal.mdc` | 対話ログは追記専用 |
 | `.cursor/rules/system.mdc` | System は参照のみ。語彙追加は承認が要る |
 | `System/Schemas/tags.md` | 第1段語彙、書き方、再構成の合図 |
 | `System/Schemas/properties.md` | type / status / confidence の語彙 |
 
-自動実行してよいもの: 新規ノート、seed と developing ノートの更新、Properties 補完、タグ正規化、壊れたリンクの指摘。
+自動実行してよいもの: 明示指示に基づく新規ノート、seed と developing ノートの更新、Properties 補完、タグ正規化、壊れたリンクの指摘。
 
 確認後: タグ語彙の変更、ノート統合、`stable` 本文の変更、タイトル変更。
 

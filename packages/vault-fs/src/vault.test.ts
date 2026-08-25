@@ -54,6 +54,13 @@ describe("vault-fs", () => {
       expect(template).toContain("参照・更新したノート");
       expect(await readFile(path.join(dir, "AGENTS.md"), "utf8")).toContain("Nousarium");
       expect(await readFile(path.join(dir, "AGENTS.md"), "utf8")).toContain("分類の歪みに気づいたら提案する");
+      expect(await readFile(path.join(dir, "AGENTS.md"), "utf8")).toContain("応答の文体");
+      expect(await readFile(path.join(dir, "AGENTS.md"), "utf8")).toContain("文のリズムと組み立ての均質さ");
+      expect(await readFile(path.join(dir, "AGENTS.md"), "utf8")).toContain("否定→肯定の対比を連発しない");
+      expect(await readFile(path.join(dir, "AGENTS.md"), "utf8")).toContain("持ち主が明示したときだけ行う");
+      expect(await readFile(path.join(dir, "AGENTS.md"), "utf8")).toContain("調べて答えただけの情報も書かない");
+      expect(await readFile(path.join(dir, "AGENTS.md"), "utf8")).toContain("積極的に Web 検索で最新情報を取る");
+      expect(await readFile(path.join(dir, "AGENTS.md"), "utf8")).toContain("webSearch");
       expect(await readFile(path.join(dir, ".cursor/rules/note-format.mdc"), "utf8")).toContain("globs: Notes/**");
       expect(await readFile(path.join(dir, ".cursor/rules/note-format.mdc"), "utf8")).toContain("derived-from:");
       expect(await readFile(path.join(dir, ".cursor/rules/journal.mdc"), "utf8")).toContain("globs: Journal/**");

@@ -65,10 +65,14 @@ export function NotesProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener(NOTES_CHANGED, onRefresh);
   }, [refresh]);
 
-  const knownNotes = useMemo(
-    () => items.map((item) => item.path.replace(/^Notes\//, "").replace(/\.md$/, "")),
-    [items],
-  );
+  const knownNotes = useMemo(() => {
+    const names = new Set<string>();
+    for (const item of items) {
+      names.add(item.path.replace(/^Notes\//, "").replace(/\.md$/, ""));
+      names.add(item.title);
+    }
+    return [...names];
+  }, [items]);
 
   const value = useMemo(
     () => ({ items, loading, knownNotes, refresh }),

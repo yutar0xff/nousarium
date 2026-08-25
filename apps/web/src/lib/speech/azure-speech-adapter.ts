@@ -95,6 +95,7 @@ export function createAzureSpeechAdapter(): SpeechInputController {
           const {
             AudioConfig,
             CancellationReason,
+            ProfanityOption,
             ResultReason,
             SpeechConfig,
             SpeechRecognizer,
@@ -104,6 +105,7 @@ export function createAzureSpeechAdapter(): SpeechInputController {
 
           const speechConfig = SpeechConfig.fromAuthorizationToken(payload.token, payload.region);
           speechConfig.speechRecognitionLanguage = payload.language;
+          speechConfig.setProfanity(ProfanityOption.Raw);
           const audioConfig = AudioConfig.fromDefaultMicrophoneInput();
           const next = new SpeechRecognizer(speechConfig, audioConfig);
           recognizer = next;
