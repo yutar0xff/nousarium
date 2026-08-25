@@ -131,6 +131,35 @@ export const sendMessageRequestSchema = z.object({
 });
 export type SendMessageRequest = z.infer<typeof sendMessageRequestSchema>;
 
+export const uploadAssetRequestSchema = z.object({
+  filename: z.string().min(1).max(200),
+  mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif"]),
+  contentBase64: z.string().min(1),
+});
+export type UploadAssetRequest = z.infer<typeof uploadAssetRequestSchema>;
+
+export const uploadAssetResponseSchema = z.object({
+  path: z.string().min(1),
+  mimeType: z.string().min(1),
+  bytes: z.number().int().positive(),
+});
+export type UploadAssetResponse = z.infer<typeof uploadAssetResponseSchema>;
+
+export const cleanupUploadsRequestSchema = z.object({
+  maxAgeDays: z.number().int().min(1).max(365).optional(),
+  dryRun: z.boolean().optional(),
+});
+export type CleanupUploadsRequest = z.infer<typeof cleanupUploadsRequestSchema>;
+
+export const cleanupUploadsResponseSchema = z.object({
+  deleted: z.array(z.string()),
+  skippedReferenced: z.array(z.string()),
+  skippedFresh: z.array(z.string()),
+  dryRun: z.boolean(),
+  maxAgeDays: z.number().int().positive(),
+});
+export type CleanupUploadsResponse = z.infer<typeof cleanupUploadsResponseSchema>;
+
 export const updatePolicyRequestSchema = z.object({
   accessPolicy: accessPolicySchema.optional(),
   model: modelIdSchema.optional(),

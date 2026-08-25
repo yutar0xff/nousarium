@@ -7,6 +7,7 @@ export { TextInput, Textarea, Select } from "./text-input";
 export { Switch } from "./switch";
 export { Sheet } from "./sheet";
 export { ConfirmDialog } from "./confirm-dialog";
+export { PeekDialog } from "./peek-dialog";
 export { Menu, MenuItem, MenuLabel, MenuSeparator, MenuRadioGroup, MenuRadioItem } from "./menu";
 export { ToastProvider, useToast } from "./toast";
 export { EmptyState, Skeleton } from "./empty-state";
@@ -33,4 +34,6 @@ export {
   SpeechCancelIcon,
   SpeechEditIcon,
   SpeechSendIcon,
+  PlusIcon,
+  ImageIcon,
 } from "./icons";

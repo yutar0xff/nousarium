@@ -95,6 +95,28 @@ Tailscale 経由でアクセスする場合、`.env` の `WEB_ORIGIN` に Serve 
 - runtime: 停止中にディレクトリを暗号化コピー（任意）
 - 対話ログは Vault 内 Markdown のため、Vault のバックアップに含まれます
 
+## `_assets/uploads` の掃除
+
+チャット添付は `_assets/uploads/` に置かれます。ノートに残す画像は `_assets/notes/<ノート名>/` へ移します。uploads のうち、最終更新から既定 14 日以上経ち、かつ `Notes/` から参照されていないファイルを削除できます。
+
+```bash
+# 確認のみ
+pnpm vault:cleanup-uploads --path /srv/nousarium/vault --dry-run
+
+# 削除
+pnpm vault:cleanup-uploads --path /srv/nousarium/vault --days 14
+```
+
+API（Bearer 認証）:
+
+```bash
+curl -sS -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"maxAgeDays":14,"dryRun":false}' \
+  http://127.0.0.1:8787/vault/assets/cleanup
+```
+
+週 1 回など、cron で `pnpm vault:cleanup-uploads` を回します。
+
 ## 更新
 
 ```bash

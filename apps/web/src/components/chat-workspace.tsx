@@ -19,7 +19,6 @@ import {
   Textarea,
   useToast,
 } from "@nousarium/ui";
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { api, streamMessage } from "../lib/api";
 import { consumeNewConversationRequest, NEW_CONVERSATION } from "../lib/new-conversation";
@@ -27,11 +26,20 @@ import { RUN_STATUS_LABELS, runStatusLabel, toolStatusLabel } from "../lib/run-s
 import { replaceConversationPath } from "../lib/pathname";
 import { useSpeechInput } from "../lib/use-speech-input";
 import { useWikiNavigation } from "../lib/use-wiki-navigation";
+import { isWikiJournalTarget } from "../lib/wiki-nav";
 import { MarkdownPreview } from "../features/editor/preview";
+import {
+  ComposerAttachControls,
+  ComposerAttachmentCapsules,
+  createNoteAttachment,
+  serializeComposerMessage,
+  type ComposerAttachment,
+} from "./composer-attach";
 import { DiffView, summarizeDiffs } from "./diff-view";
 import { notifyConversationsChanged } from "./conversation-sidebar";
 import { useChrome } from "./chrome-context";
 import { useModels } from "../lib/use-models";
+import { VaultPeekDialog, type VaultPeek } from "./vault-peek";
 
 type ToolRow = {
   id: string;
@@ -40,8 +48,19 @@ type ToolRow = {
   status: "started" | "completed";
 };
 
-function UserBubble({ content }: { content: string }) {
+function UserBubble({
+  content,
+  knownNotes,
+  onWikiLink,
+  onImageClick,
+}: {
+  content: string;
+  knownNotes: string[];
+  onWikiLink: (target: string) => void;
+  onImageClick: (path: string, alt?: string) => void;
+}) {
   const preview = content.replace(/\s+/g, " ").trim();
+  const hasMarkdown = content.includes("[[") || content.includes("![") || content.includes("\n") || content.includes("`");
   return (
     <article className="flex justify-end">
       <details className="group max-w-[min(80%,24rem)] rounded-2xl bg-accent-soft">
@@ -50,7 +69,18 @@ function UserBubble({ content }: { content: string }) {
           <span className="hidden min-w-0 flex-1 text-caption text-text-muted group-open:block">自分</span>
           <ChevronDownIcon className="size-4 shrink-0 text-text-muted transition-transform group-open:rotate-180" />
         </summary>
-        <div className="whitespace-pre-wrap px-3 pb-3 text-body text-text-primary">{content}</div>
+        {hasMarkdown ? (
+          <div className="px-3 pb-3">
+            <MarkdownPreview
+              value={content}
+              knownNotes={knownNotes}
+              onWikiLink={onWikiLink}
+              onImageClick={onImageClick}
+            />
+          </div>
+        ) : (
+          <div className="whitespace-pre-wrap px-3 pb-3 text-body text-text-primary">{content}</div>
+        )}
       </details>
     </article>
   );
@@ -64,10 +94,10 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
   const { setTitle, setChat } = useChrome();
   const { optionsFor, defaultModel } = useModels();
   const { toast } = useToast();
-  const router = useRouter();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
   const speech = useSpeechInput({
     onError: (message) => toast(message, "danger"),
   });
@@ -85,7 +115,8 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
   const [reverting, setReverting] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
   const [knownNotes, setKnownNotes] = useState<string[]>([]);
-  const openWikiTarget = useWikiNavigation();
+  const [peek, setPeek] = useState<VaultPeek | null>(null);
+  const navigateWikiTarget = useWikiNavigation();
   const bottom = useRef<HTMLDivElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const followOutputRef = useRef(true);
@@ -108,6 +139,19 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
   );
   const showWait = Boolean(busy && waitLabel && !hasAssistantContent && tools.length === 0);
   const diffSummary = summarizeDiffs(noteDiffs);
+
+  function openChatWiki(target: string) {
+    if (isWikiJournalTarget(target)) {
+      setPeek(null);
+      void navigateWikiTarget(target);
+      return;
+    }
+    setPeek({ kind: "note", target });
+  }
+
+  function openChatImage(path: string, alt?: string) {
+    setPeek({ kind: "image", path, alt });
+  }
 
   async function load(id: string) {
     const data = await api<{ conversation: Conversation; messages: Message[] }>(`/conversations/${id}`);
@@ -134,7 +178,9 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
     setRetryContent(null);
     setExcluded(false);
     setContextOpen(false);
+    setPeek(null);
     setInput("");
+    setAttachments([]);
     setBusy(false);
     setWaitLabel(null);
     followOutputRef.current = true;
@@ -215,14 +261,9 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
     const note = new URLSearchParams(window.location.search).get("note");
     if (!note) return;
     seededNoteRef.current = true;
-    setInput(`[[${noteTitleFromPath(note)}]]\n`);
+    setAttachments([createNoteAttachment(noteTitleFromPath(note))]);
     requestAnimationFrame(() => {
-      const el = textareaRef.current;
-      if (!el) return;
-      el.focus();
-      const end = el.value.length;
-      el.setSelectionRange(end, end);
-      resizeTextarea();
+      textareaRef.current?.focus();
     });
   }, [conversationId]);
 
@@ -407,9 +448,10 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
   }
 
   async function sendContent(raw: string) {
-    if (!raw.trim() || busy) return;
-    const content = raw.trim();
+    const content = serializeComposerMessage(attachments, raw);
+    if (!content.trim() || busy) return;
     setInput("");
+    setAttachments([]);
     if (textareaRef.current) {
       textareaRef.current.style.height = "";
     }
@@ -504,6 +546,17 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
     }
   }
 
+  function addAttachment(item: ComposerAttachment) {
+    setAttachments((prev) => (prev.some((entry) => entry.id === item.id) ? prev : [...prev, item]));
+  }
+
+  function previewAttachment(item: ComposerAttachment) {
+    if (item.kind === "image") setPeek({ kind: "image", path: item.path, alt: item.label });
+    else setPeek({ kind: "note", target: item.title });
+  }
+
+  const canSend = Boolean(input.trim() || attachments.length > 0);
+
   const contextBody = (
     <div className="flex h-full flex-col gap-4 overflow-y-auto p-4">
       {runDiffs.length > 0 ? (
@@ -556,7 +609,18 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
         "focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-stroke-strong",
       )}
     >
+      <ComposerAttachmentCapsules
+        attachments={attachments}
+        disabled={busy || speech.listening}
+        onPreview={previewAttachment}
+        onRemove={(id) => setAttachments((prev) => prev.filter((item) => item.id !== id))}
+      />
       <div className="flex items-end gap-2">
+        <ComposerAttachControls
+          disabled={busy || speech.listening}
+          onAttach={addAttachment}
+          onError={(message) => toast(message, "danger")}
+        />
         <Textarea
           ref={textareaRef}
           className="max-h-[14rem] min-h-11 w-auto min-w-0 flex-1 border-0 bg-transparent focus-visible:outline-none"
@@ -613,7 +677,7 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
             <StopIcon />
           </IconButton>
         ) : (
-          <IconButton variant="primary" label="送信" onClick={() => void send()} disabled={busy || !input.trim()}>
+          <IconButton variant="primary" label="送信" onClick={() => void send()} disabled={busy || !canSend}>
             <SendIcon />
           </IconButton>
         )}
@@ -630,7 +694,7 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
             <div className="flex w-full max-w-[46rem] flex-col gap-6">
               <div className="text-center">
                 <h2 className="text-title font-semibold text-text-primary md:text-display">何を考えていますか？</h2>
-                <p className="mt-2 text-ui text-text-secondary">質問の深さも、ノートに残すかも、AI が判断します。</p>
+                <p className="mt-2 text-ui text-text-secondary">考えを深めたり、ノートを指したり、画像を添えたりできます。</p>
               </div>
               {composer}
             </div>
@@ -647,7 +711,15 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
                   if (message.role === "assistant" && !message.content) return null;
                   const streaming = Boolean(busy && message.role === "assistant" && message.runId === runId);
                   if (message.role === "user") {
-                    return <UserBubble key={message.runId ?? message.id} content={message.content} />;
+                    return (
+                      <UserBubble
+                        key={message.runId ?? message.id}
+                        content={message.content}
+                        knownNotes={knownNotes}
+                        onWikiLink={openChatWiki}
+                        onImageClick={openChatImage}
+                      />
+                    );
                   }
                   return (
                     <article key={message.runId ?? message.id} className="border-l-2 border-accent pl-4">
@@ -662,7 +734,8 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
                         value={message.content}
                         knownNotes={knownNotes}
                         streaming={streaming}
-                        onWikiLink={openWikiTarget}
+                        onWikiLink={openChatWiki}
+                        onImageClick={openChatImage}
                       />
                     </article>
                   );
@@ -717,6 +790,16 @@ export function ChatWorkspace({ conversationId }: { conversationId?: string }) {
           {contextBody}
         </Sheet>
       </div>
+
+      <VaultPeekDialog
+        peek={peek}
+        onOpenChange={(next) => {
+          if (!next) setPeek(null);
+        }}
+        knownNotes={knownNotes}
+        onWikiLink={openChatWiki}
+        onImageClick={openChatImage}
+      />
     </div>
   );
 }

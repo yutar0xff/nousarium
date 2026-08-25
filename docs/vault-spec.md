@@ -40,6 +40,8 @@ vault/
 │  ├─ Templates/
 │  └─ Schemas/
 ├─ _assets/
+│  ├─ uploads/     # チャット添付（一時）
+│  └─ notes/       # ノート引用用（恒久）
 ├─ _protected/
 └─ Trash/
 ```
@@ -49,7 +51,8 @@ vault/
 | `Notes/` | 知識ノート。フラット。AI が作り、育てる |
 | `Journal/Conversations/` | 対話ログ。システムが追記。AI は書き換えない |
 | `System/` | 規約・テンプレート・語彙。参照する。語彙の追加は人間の承認が要る |
-| `_assets/` | 添付 |
+| `_assets/uploads/` | チャット添付の一時置き場。定期掃除の対象 |
+| `_assets/notes/<ノート名>/` | ノートに引用する恒久画像 |
 | `_protected/` | Agent から物理的に読ませない |
 | `Trash/` | 復元待ち |
 

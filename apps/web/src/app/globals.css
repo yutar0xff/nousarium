@@ -292,6 +292,10 @@ body {
   margin-top: 0.5em;
 }
 
+.markdown-body img.is-peekable {
+  cursor: zoom-in;
+}
+
 .wikilink {
   color: var(--color-accent);
   text-decoration: underline;

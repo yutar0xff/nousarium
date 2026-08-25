@@ -9,6 +9,10 @@ export const metadata: Metadata = {
   title: "Nousarium",
   description: "対話から知識空間を育てる",
   manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/icon.svg", type: "image/svg+xml" }],
+  },
   appleWebApp: {
     capable: true,
     title: "Nousarium",

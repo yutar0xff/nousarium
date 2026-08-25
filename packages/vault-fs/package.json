@@ -6,12 +6,15 @@
     ".": "./src/index.ts"
   },
   "bin": {
-    "nousarium-vault-init": "./src/cli.ts"
+    "nousarium-vault-init": "./src/cli.ts",
+    "nousarium-vault-cleanup-uploads": "./src/cli-cleanup-uploads.ts"
   },
   "scripts": {
     "test": "vitest run",
-    "vault:init": "tsx src/cli.ts"
+    "vault:init": "tsx src/cli.ts",
+    "vault:cleanup-uploads": "tsx src/cli-cleanup-uploads.ts"
   },
+
   "dependencies": {
     "@nousarium/contracts": "workspace:*",
     "@nousarium/core": "workspace:*",

@@ -15,4 +15,5 @@ alwaysApply: false
 - タグを付ける前に `System/Schemas/tags.md` を読む
 - 関係は本文の「関係」に `supports:` `contradicts:` `derived-from:` で書く
 - `derived-from:` はシステムが書く。消さない
+- 画像は `_assets/notes/<ノート名>/` に置き `![説明](_assets/notes/<ノート名>/ファイル)` で参照する。`_assets/uploads/` はノート引用に使わない
 - 新規作成時は `System/Templates/` の対応する雛形を読む。複数 type なら該当する節を合成する

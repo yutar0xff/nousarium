@@ -2,11 +2,13 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 import {
+  cleanupUploadsRequestSchema,
   createConversationRequestSchema,
   saveDocumentRequestSchema,
   searchQuerySchema,
   sendMessageRequestSchema,
   updatePolicyRequestSchema,
+  uploadAssetRequestSchema,
 } from "@nousarium/contracts";
 import {
   applyPendingPolicy,
@@ -17,7 +19,16 @@ import {
 } from "@nousarium/core";
 import type { AgentPort, ConversationStore, VaultPort, VersionControlPort } from "@nousarium/core";
 import { isNotePath } from "@nousarium/markdown";
-import { VaultConflictError, withAiAccess } from "@nousarium/vault-fs";
+import {
+  buildUploadAssetPath,
+  cleanupUploadAssets,
+  isAllowedAssetMime,
+  readVaultAsset,
+  VAULT_ASSET_MAX_BYTES,
+  VaultConflictError,
+  withAiAccess,
+  writeVaultAsset,
+} from "@nousarium/vault-fs";
 import { authMiddleware, signToken } from "./auth.js";
 import type { AppConfig } from "./config.js";
 import { appendJournal, writeRunLinks } from "./journal.js";
@@ -325,6 +336,59 @@ export function createApp(input: {
         return c.json({ error: "conflict", path: error.path, currentHash: error.currentHash }, 409);
       }
       throw error;
+    }
+  });
+
+  app.post("/vault/assets", async (c) => {
+    const body = uploadAssetRequestSchema.parse(await c.req.json());
+    if (!isAllowedAssetMime(body.mimeType)) {
+      return c.json({ error: "unsupported image type" }, 400);
+    }
+    let data: Buffer;
+    try {
+      data = Buffer.from(body.contentBase64, "base64");
+    } catch {
+      return c.json({ error: "invalid base64" }, 400);
+    }
+    if (!data.byteLength) return c.json({ error: "empty asset" }, 400);
+    if (data.byteLength > VAULT_ASSET_MAX_BYTES) {
+      return c.json({ error: `asset exceeds ${VAULT_ASSET_MAX_BYTES} bytes` }, 413);
+    }
+    try {
+      const relative = buildUploadAssetPath(body.filename, body.mimeType);
+      const path = await writeVaultAsset(config.vaultPath, relative, data);
+      return c.json({ path, mimeType: body.mimeType, bytes: data.byteLength });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "asset upload failed";
+      return c.json({ error: message }, 400);
+    }
+  });
+
+  app.get("/vault/raw", async (c) => {
+    const filePath = c.req.query("path");
+    if (!filePath) return c.json({ error: "path required" }, 400);
+    try {
+      const asset = await readVaultAsset(config.vaultPath, filePath);
+      return new Response(new Uint8Array(asset.data), {
+        status: 200,
+        headers: {
+          "content-type": asset.contentType,
+          "cache-control": "private, max-age=3600",
+        },
+      });
+    } catch {
+      return c.json({ error: "not found" }, 404);
+    }
+  });
+
+  app.post("/vault/assets/cleanup", async (c) => {
+    const body = cleanupUploadsRequestSchema.parse(await c.req.json().catch(() => ({})));
+    try {
+      const result = await cleanupUploadAssets(config.vaultPath, body);
+      return c.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "cleanup failed";
+      return c.json({ error: message }, 400);
     }
   });
 

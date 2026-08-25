@@ -39,7 +39,9 @@ export async function ensureAuth(): Promise<void> {
 async function authorizedFetch(path: string, init: RequestInit = {}): Promise<Response> {
   await ensureAuth();
   const headers = new Headers(init.headers);
-  headers.set("content-type", "application/json");
+  if (!headers.has("content-type") && init.body !== undefined) {
+    headers.set("content-type", "application/json");
+  }
   const token = getToken();
   if (token) headers.set("authorization", `Bearer ${token}`);
 
@@ -55,12 +57,56 @@ async function authorizedFetch(path: string, init: RequestInit = {}): Promise<Re
 }
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await authorizedFetch(path, init);
+  const response = await authorizedFetch(path, {
+    ...init,
+    headers: {
+      "content-type": "application/json",
+      ...(init.headers ?? {}),
+    },
+  });
   if (!response.ok) {
     const text = await response.text();
     throw new Error(text || response.statusText);
   }
   return (await response.json()) as T;
+}
+
+export async function fetchVaultRaw(path: string): Promise<Blob> {
+  const response = await authorizedFetch(`/vault/raw?path=${encodeURIComponent(path)}`);
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || response.statusText);
+  }
+  return response.blob();
+}
+
+export async function uploadVaultAsset(input: {
+  filename: string;
+  mimeType: "image/jpeg" | "image/png" | "image/webp" | "image/gif";
+  file: File;
+}): Promise<{ path: string; mimeType: string; bytes: number }> {
+  const contentBase64 = await fileToBase64(input.file);
+  return api("/vault/assets", {
+    method: "POST",
+    body: JSON.stringify({
+      filename: input.filename,
+      mimeType: input.mimeType,
+      contentBase64,
+    }),
+  });
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("failed to read file"));
+    reader.onload = () => {
+      const result = String(reader.result ?? "");
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 export async function streamMessage(

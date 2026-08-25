@@ -155,6 +155,13 @@ const AGENTS_MD = `# Nousarium
 
 知識ノートはすべて \`Notes/\` 直下に置く。タイトルは Vault 全体で一意。分類のためにファイルを移動しない。
 
+画像をノートに載せるとき
+
+- \`_assets/uploads/\` はチャット添付の一時置き場。定期掃除で消える
+- ノートに残す画像は \`_assets/notes/<ノート名>/\` へ移してから本文で参照する
+- 手順: \`mkdir -p "_assets/notes/<ノート名>"\` → \`mv "_assets/uploads/…" "_assets/notes/<ノート名>/"\` → 本文に \`![説明](_assets/notes/<ノート名>/ファイル名)\`
+- 対話ログ側の uploads パスはそのままでよい。ノート側だけ恒久パスにする
+
 \`type\` は多値。側面が複数あれば並べる。語彙は \`System/Schemas/properties.md\`。
 
 タグを付ける前に \`System/Schemas/tags.md\` を読む。第1段はそこにある語だけ使う。当てはまらなければタグを付けず \`status: seed\` にする。第1段を自分で増やさない。
@@ -206,6 +213,7 @@ alwaysApply: false
 - タグを付ける前に \`System/Schemas/tags.md\` を読む
 - 関係は本文の「関係」に \`supports:\` \`contradicts:\` \`derived-from:\` で書く
 - \`derived-from:\` はシステムが書く。消さない
+- 画像は \`_assets/notes/<ノート名>/\` に置き \`![説明](_assets/notes/<ノート名>/ファイル)\` で参照する。\`_assets/uploads/\` はノート引用に使わない
 - 新規作成時は \`System/Templates/\` の対応する雛形を読む。複数 type なら該当する節を合成する
 `;
 

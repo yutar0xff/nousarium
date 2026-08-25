@@ -250,4 +250,49 @@ describe("agent-service", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it("uploads and serves vault image assets", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "nousarium-asset-api-"));
+    try {
+      const app = await createTestApp(dir);
+      const login = await app.request("/login", { method: "POST" });
+      const { token } = (await login.json()) as { token: string };
+      const auth = { authorization: `Bearer ${token}` };
+      const bytes = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+      const uploaded = await app.request("/vault/assets", {
+        method: "POST",
+        headers: { ...auth, "content-type": "application/json" },
+        body: JSON.stringify({
+          filename: "shot.png",
+          mimeType: "image/png",
+          contentBase64: bytes.toString("base64"),
+        }),
+      });
+      expect(uploaded.status).toBe(200);
+      const body = (await uploaded.json()) as { path: string; bytes: number };
+      expect(body.path.startsWith("_assets/uploads/")).toBe(true);
+      expect(body.bytes).toBe(bytes.byteLength);
+
+      const raw = await app.request(`/vault/raw?path=${encodeURIComponent(body.path)}`, { headers: auth });
+      expect(raw.status).toBe(200);
+      expect(raw.headers.get("content-type")).toBe("image/png");
+      const served = Buffer.from(await raw.arrayBuffer());
+      expect(served.equals(bytes)).toBe(true);
+
+      const denied = await app.request("/vault/raw?path=Notes/x.png", { headers: auth });
+      expect(denied.status).toBe(404);
+
+      const cleanup = await app.request("/vault/assets/cleanup", {
+        method: "POST",
+        headers: { ...auth, "content-type": "application/json" },
+        body: JSON.stringify({ maxAgeDays: 14, dryRun: true }),
+      });
+      expect(cleanup.status).toBe(200);
+      const cleaned = (await cleanup.json()) as { dryRun: boolean; deleted: string[] };
+      expect(cleaned.dryRun).toBe(true);
+      expect(Array.isArray(cleaned.deleted)).toBe(true);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });

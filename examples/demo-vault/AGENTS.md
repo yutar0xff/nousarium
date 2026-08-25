@@ -96,6 +96,13 @@
 
 知識ノートはすべて `Notes/` 直下に置く。タイトルは Vault 全体で一意。分類のためにファイルを移動しない。
 
+画像をノートに載せるとき
+
+- `_assets/uploads/` はチャット添付の一時置き場。定期掃除で消える
+- ノートに残す画像は `_assets/notes/<ノート名>/` へ移してから本文で参照する
+- 手順: `mkdir -p "_assets/notes/<ノート名>"` → `mv "_assets/uploads/…" "_assets/notes/<ノート名>/"` → 本文に `![説明](_assets/notes/<ノート名>/ファイル名)`
+- 対話ログ側の uploads パスはそのままでよい。ノート側だけ恒久パスにする
+
 `type` は多値。側面が複数あれば並べる。語彙は `System/Schemas/properties.md`。
 
 タグを付ける前に `System/Schemas/tags.md` を読む。第1段はそこにある語だけ使う。当てはまらなければタグを付けず `status: seed` にする。第1段を自分で増やさない。
